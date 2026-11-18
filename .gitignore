@@ -51,3 +51,5 @@ CLAUDE.md
 *.sln
 *.sw?
 .gitnexus
+.vercel
+.env*
