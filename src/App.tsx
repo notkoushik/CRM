@@ -11,7 +11,9 @@ import { Contacts } from './components/Contacts';
 import { ImportLeads } from './components/ImportLeads';
 import { Users } from './components/Users';
 import { SettingsPage } from './components/SettingsPage';
+import { HandoffsPage, ProjectsPage } from './components/Projects';
 import { LoginPage } from './components/LoginPage';
+import { CallDesk } from './components/CallDesk';
 import { Skeleton, SkeletonRows } from './components/ui';
 import { PAGE_TITLE } from './lib/nav';
 
@@ -21,10 +23,14 @@ const SdrActivity = lazy(() =>
 );
 
 const ADMIN_ONLY_PAGES: Page[] = ['activity', 'users', 'settings'];
+const DEVELOPER_HIDDEN_PAGES: Page[] = ['calls', 'handoffs', 'import', 'pipeline', 'contacts', 'activity', 'users', 'settings'];
 const ALL_PAGES: Page[] = [
   'dashboard',
+  'calls',
   'import',
   'pipeline',
+  'handoffs',
+  'projects',
   'contacts',
   'activity',
   'users',
@@ -168,7 +174,7 @@ function PageSkeleton() {
 function PageLoadingSkeleton({ page, stages }: { page: Page; stages: string[] }) {
   if (page === 'dashboard') return <DashboardSkeleton />;
   if (page === 'pipeline') return <PipelineSkeleton stages={stages} />;
-  if (page === 'contacts') return <ContactsSkeleton />;
+  if (page === 'contacts' || page === 'calls') return <ContactsSkeleton />;
   return <PageSkeleton />;
 }
 
@@ -179,6 +185,18 @@ export default function App() {
   const [page, setPage] = useState<Page>(initialQuery.page ?? 'dashboard');
   const [menuOpen, setMenuOpen] = useState(false);
   const [openCompanyId, setOpenCompanyId] = useState<string | null>(initialQuery.companyId);
+
+  // Prevent accidental number input increment/decrement when scrolling with the mouse wheel
+  useEffect(() => {
+    const handleWheel = () => {
+      const active = document.activeElement;
+      if (active && active.tagName === 'INPUT' && (active as HTMLInputElement).type === 'number') {
+        (active as HTMLInputElement).blur();
+      }
+    };
+    window.addEventListener('wheel', handleWheel, { passive: true });
+    return () => window.removeEventListener('wheel', handleWheel);
+  }, []);
 
   const manageUsers = canManageUsers(auth.user?.role);
   const config = auth.config;
@@ -195,6 +213,18 @@ export default function App() {
         writeQuery('dashboard', null);
         return;
       }
+      if (auth.user?.role === 'developer' && DEVELOPER_HIDDEN_PAGES.includes(next)) {
+        setPage('projects');
+        setMenuOpen(false);
+        writeQuery('projects', null);
+        return;
+      }
+      if (next === 'handoffs' && auth.user?.role === 'developer') {
+        setPage('projects');
+        setMenuOpen(false);
+        writeQuery('projects', null);
+        return;
+      }
       setPage(next);
       setMenuOpen(false);
       writeQuery(next, next === 'pipeline' ? openCompanyId : null);
@@ -204,6 +234,11 @@ export default function App() {
 
   useEffect(() => {
     if (!auth.user) return;
+    if (auth.user.role === 'developer' && page === 'dashboard') {
+      setPage('projects');
+      writeQuery('projects', null);
+      return;
+    }
     if (ADMIN_ONLY_PAGES.includes(page) && !canManageUsers(auth.user.role)) {
       setPage('dashboard');
       writeQuery('dashboard', null);
@@ -217,6 +252,11 @@ export default function App() {
     if (qPage) {
       if (ADMIN_ONLY_PAGES.includes(qPage) && !canManageUsers(auth.user.role)) {
         setPage('dashboard');
+        return;
+      }
+      if (auth.user.role === 'developer' && DEVELOPER_HIDDEN_PAGES.includes(qPage)) {
+        setPage('projects');
+        writeQuery('projects', null);
         return;
       }
       setPage(qPage);
@@ -272,28 +312,30 @@ export default function App() {
         </div>
       ) : null}
       <header
-        className="sticky top-0 z-30 flex items-center gap-3 border-b border-[var(--color-line)] bg-[var(--color-panel)] px-4 py-3 lg:hidden"
+        className="sticky top-0 z-30 flex items-center gap-3 border-b border-slate-200 bg-white/95 px-4 py-3 backdrop-blur-md lg:hidden"
         style={{ paddingTop: 'max(0.75rem, env(safe-area-inset-top))' }}
       >
         <button
           type="button"
           onClick={() => setMenuOpen(true)}
-          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-none border border-[var(--color-line)] bg-white text-stone-700"
+          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-700 shadow-2xs hover:bg-slate-50 transition cursor-pointer"
           aria-label="Open menu"
         >
-          <span className="text-lg leading-none">☰</span>
+          <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <line x1="4" x2="20" y1="12" y2="12" />
+            <line x1="4" x2="20" y1="6" y2="6" />
+            <line x1="4" x2="20" y1="18" y2="18" />
+          </svg>
         </button>
         <div className="min-w-0 flex-1">
-          <p className="truncate font-[family-name:var(--font-display)] text-lg text-stone-900">
-            {PAGE_TITLE[page]}
+          <p className="truncate font-bold text-slate-900 text-base">
+            {page === 'dashboard' && auth.user.role === 'developer' ? 'Assigned Projects' : PAGE_TITLE[page]}
           </p>
-          <p className="truncate text-[11px] text-stone-500">{auth.user.name}</p>
+          <p className="truncate text-[11px] font-medium text-slate-500">{auth.user.name}</p>
         </div>
-        <img
-          src={config.logoUrl}
-          alt={config.brandName}
-          className="h-9 w-9 shrink-0 rounded-none object-cover"
-        />
+        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-teal-600 text-xs font-bold text-white shadow-xs">
+          SL
+        </span>
       </header>
 
       {menuOpen ? (
@@ -334,13 +376,59 @@ export default function App() {
         aria-busy={store.loading}
         className="min-w-0 flex-1 overflow-auto p-4 pb-24 sm:p-6 lg:p-8 lg:pb-8"
       >
+        {/* Mobile Top Brand Bar (Visible on mobile/tablet screens < lg) */}
+        <div className="flex lg:hidden items-center justify-between pb-3.5 mb-4 border-b border-slate-200">
+          <div className="flex items-center gap-2.5">
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-slate-200/90 bg-white p-1.5 shadow-xs">
+              <img
+                src={config.logoUrl || '/skylance-icon.png'}
+                alt={config.brandName || 'Skylance Tek'}
+                className="h-full w-full object-contain"
+              />
+            </div>
+            <div>
+              <p className="font-extrabold text-slate-900 text-sm leading-tight">
+                {config.brandName || 'Skylance Tek'}
+              </p>
+              <p className="text-[10px] font-bold text-teal-700 uppercase tracking-wider">
+                Work. The Smarter Way.
+              </p>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={() => void auth.logout()}
+            className="text-xs text-rose-600 font-bold px-3 py-1.5 rounded-lg bg-rose-50 border border-rose-200 hover:bg-rose-100 transition cursor-pointer"
+          >
+            Logout
+          </button>
+        </div>
+
+        <div className="hidden lg:flex items-center justify-between pb-4 mb-6 border-b border-slate-200">
+          <div className="flex items-center gap-2 text-xs text-slate-500">
+            <span className="font-semibold text-slate-700">Agency Workspace</span>
+            <span>/</span>
+            <span className="font-bold text-teal-800 bg-teal-50 px-2 py-0.5 rounded-md border border-teal-200/60">
+              {page === 'dashboard' && auth.user.role === 'developer' ? 'Assigned Projects' : PAGE_TITLE[page]}
+            </span>
+          </div>
+          <div className="flex items-center gap-3">
+            <span className="inline-flex items-center gap-1.5 text-xs text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-full border border-emerald-200/80 font-semibold shadow-2xs">
+              <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
+              Skylance Engine Active
+            </span>
+            <span className="text-xs text-slate-600 bg-slate-100 px-2.5 py-1 rounded-full border border-slate-200 font-medium">
+              Signed in as: <strong className="text-slate-900">{auth.user.name}</strong> ({auth.user.role === 'sdr' ? 'Caller' : auth.user.role === 'developer' ? 'Developer' : 'Admin'})
+            </span>
+          </div>
+        </div>
         {store.loading ? (
           <p role="status" className="sr-only">
             Loading your CRM…
           </p>
         ) : null}
         {store.error ? (
-          <p role="alert" className="mb-4 rounded-none bg-rose-50 px-3 py-2 text-sm text-rose-700">
+          <p role="alert" className="mb-4 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-medium text-rose-700 shadow-2xs">
             {store.error}
           </p>
         ) : null}
@@ -350,12 +438,34 @@ export default function App() {
           </div>
         ) : (
           <>
-            {page === 'dashboard' ? (
+            {page === 'dashboard' && auth.user.role === 'developer' ? (
+              <section className="max-w-2xl space-y-3 border border-[var(--color-line)] bg-[var(--color-panel)] p-6">
+                <p className="text-xs font-semibold tracking-[0.14em] text-teal-700 uppercase">
+                  Developer workspace
+                </p>
+                <h1 className="font-[family-name:var(--font-display)] text-3xl text-stone-900">
+                  Assigned projects
+                </h1>
+                <p className="text-sm leading-6 text-stone-600">
+                  Project assignments and technical reviews will appear here. Client leads and
+                  pricing are not available in the Developer workspace.
+                </p>
+              </section>
+            ) : null}
+            {page === 'dashboard' && auth.user.role !== 'developer' ? (
               <Dashboard
                 store={store}
                 onNavigate={navigate}
                 canManageUsers={manageUsers}
                 brandName={config.brandName}
+                userRole={auth.user.role}
+              />
+            ) : null}
+            {page === 'calls' ? (
+              <CallDesk
+                store={store}
+                userRole={auth.user.role}
+                userName={auth.user.name}
               />
             ) : null}
             {page === 'import' ? <ImportLeads store={store} /> : null}
@@ -378,6 +488,12 @@ export default function App() {
                 contactStatuses={config.contactStatuses}
                 stages={config.stages}
               />
+            ) : null}
+            {page === 'handoffs' && auth.user.role !== 'developer' ? (
+              <HandoffsPage store={store} userRole={String(auth.user.role ?? '')} onOpenProject={() => navigate('projects')} />
+            ) : null}
+            {page === 'projects' ? (
+              <ProjectsPage store={store} userRole={String(auth.user.role ?? '')} />
             ) : null}
             {page === 'activity' && manageUsers ? (
               <Suspense fallback={<p className="text-sm text-stone-500">Loading…</p>}>

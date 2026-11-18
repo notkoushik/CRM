@@ -44,6 +44,11 @@ export function mapCompany(row: Record<string, unknown>): Company {
     linkedInCompany: String(row.linkedin_company ?? ''),
     discoveryAnswers,
     createdAt: pgDateToIso(row.created_at) ?? '',
+    hasDocument: Boolean(row.has_document),
+    hasQuotation: Boolean(row.has_quotation),
+    primaryDocumentId: row.primary_document_id ? String(row.primary_document_id) : null,
+    primaryDocumentName: row.primary_document_name ? String(row.primary_document_name) : null,
+    primaryDocumentType: row.primary_document_type ? String(row.primary_document_type) : null,
   };
 }
 

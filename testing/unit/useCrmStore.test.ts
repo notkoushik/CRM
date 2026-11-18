@@ -42,27 +42,27 @@ function stageOf(companies: Company[], id: string): Stage | undefined {
 
 describe('applyChampionAutoMove', () => {
   it('moves the company to the server-returned stage (server is the source of truth)', () => {
-    const companies = [makeCompany({ id: 'co-1', stage: 'Lead Added' })];
+    const companies = [makeCompany({ id: 'co-1', stage: 'New Lead' })];
 
-    // 'Demo Scheduled' is NOT what local derivation would pick ('Discovery Call
-    // Done'), so a pass proves the server value wins over local derivation.
+    // 'Converted' is NOT what local derivation would pick ('Qualified'),
+    // so a pass proves the server value wins over local derivation.
     const out = applyChampionAutoMove(companies, {
       contact: champion,
       prevContactStatus: 'Not Contacted',
       statusPatched: true,
-      movedCompanyStage: 'Demo Scheduled',
+      movedCompanyStage: 'Converted',
     });
 
-    expect(stageOf(out, 'co-1')).toBe('Demo Scheduled');
+    expect(stageOf(out, 'co-1')).toBe('Converted');
     // Input is not mutated (pure transition).
     expect(out).not.toBe(companies);
-    expect(stageOf(companies, 'co-1')).toBe('Lead Added');
+    expect(stageOf(companies, 'co-1')).toBe('New Lead');
   });
 
   it('leaves the stage unchanged when the server reports no move (null)', () => {
-    const companies = [makeCompany({ id: 'co-1', stage: 'Lead Added' })];
+    const companies = [makeCompany({ id: 'co-1', stage: 'New Lead' })];
 
-    // Local derivation WOULD move ('Interested' => 'Discovery Call Done'); an
+    // Local derivation WOULD move ('Interested' => 'Qualified'); an
     // explicit null from the server must suppress that.
     const out = applyChampionAutoMove(companies, {
       contact: champion,
@@ -71,11 +71,11 @@ describe('applyChampionAutoMove', () => {
       movedCompanyStage: null,
     });
 
-    expect(stageOf(out, 'co-1')).toBe('Lead Added');
+    expect(stageOf(out, 'co-1')).toBe('New Lead');
   });
 
   it('falls back to local derivation when the field is absent (older server)', () => {
-    const companies = [makeCompany({ id: 'co-1', stage: 'Lead Added' })];
+    const companies = [makeCompany({ id: 'co-1', stage: 'New Lead' })];
 
     const out = applyChampionAutoMove(companies, {
       contact: champion,
@@ -84,8 +84,8 @@ describe('applyChampionAutoMove', () => {
       movedCompanyStage: undefined, // pre-field server omits it entirely
     });
 
-    // resolveAutoMoveStage('Lead Added', 'Interested') === 'Discovery Call Done'
-    expect(stageOf(out, 'co-1')).toBe('Discovery Call Done');
+    // resolveAutoMoveStage('New Lead', 'Interested') === 'Qualified'
+    expect(stageOf(out, 'co-1')).toBe('Qualified');
   });
 
   it('server-returned stage moves only the owning company, leaving others', () => {

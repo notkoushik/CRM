@@ -3,6 +3,7 @@
  */
 
 import './loadEnv.js';
+import { resolve } from 'node:path';
 
 function read(name: string): string | undefined {
   const v = process.env[name];
@@ -69,6 +70,22 @@ export const config = {
     secretAccessKey: read('AWS_SECRET_ACCESS_KEY'),
     region: read('AWS_REGION'),
     bucket: read('AWS_S3_BUCKET'),
+  },
+  storage: {
+    projectDocumentsDir: resolve(
+      read('PROJECT_DOCUMENTS_DIR') ??
+        (process.env.VERCEL ? '/tmp/project-documents' : '.local-storage/project-documents')
+    ),
+  },
+  exotel: {
+    accountSid: read('EXOTEL_ACCOUNT_SID'),
+    apiKey: read('EXOTEL_API_KEY'),
+    apiToken: read('EXOTEL_API_TOKEN'),
+    callerId: read('EXOTEL_CALLER_ID'),
+    agentPhone: read('EXOTEL_AGENT_PHONE'),
+    apiHost: read('EXOTEL_API_HOST') ?? 'api.in.exotel.com',
+    publicBaseUrl: read('EXOTEL_PUBLIC_BASE_URL'),
+    webhookToken: read('EXOTEL_WEBHOOK_TOKEN'),
   },
 } as const;
 

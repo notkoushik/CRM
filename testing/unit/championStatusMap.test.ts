@@ -14,14 +14,14 @@ const stages = [...DEFAULT_STAGES];
 describe('championMapToRows / championRowsToMap', () => {
   it('drops null targets when building editor rows', () => {
     const rows = championMapToRows({
-      Interested: 'Discovery Call Done',
+      Interested: 'Qualified',
       'Not Contacted': null,
-      Called: 'Discovery Call Done',
+      Connected: 'Contacted',
     });
-    expect(rows.map((r) => r.status)).toEqual(['Interested', 'Called']);
+    expect(rows.map((r) => r.status)).toEqual(['Interested', 'Connected']);
     expect(championRowsToMap(rows)).toEqual({
-      Interested: 'Discovery Call Done',
-      Called: 'Discovery Call Done',
+      Interested: 'Qualified',
+      Connected: 'Contacted',
     });
   });
 });
@@ -34,7 +34,7 @@ describe('validateChampionStatusToStage', () => {
   it('accepts configured status/stage pairs and null targets', () => {
     expect(
       validateChampionStatusToStage(
-        { Interested: 'Discovery Call Done', 'Not Contacted': null },
+        { Interested: 'Qualified', 'Not Contacted': null },
         statuses,
         stages
       )

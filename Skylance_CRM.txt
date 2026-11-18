@@ -1,0 +1,635 @@
+Skylance_CRM
+| Role | Email | Password | Access to check |
+|---|---|---|---|
+| Founder | `founder.seed@convobrains.com` | `TestSeed123!` | Manager and admin views |
+| SDR | `rahul.seed@convobrains.com` | `TestSeed123!` | Sales rep views |
+| SDR | `neha.seed@convobrains.com` | `TestSeed123!` | Sales rep views |
+| SDR | `aman.seed@convobrains.com` | `TestSeed123!` | Sales rep views |
+
+
+founder.seed@skylance.local,
+rahul.seed@skylance.local
+(or neha.seed@skylance.local,
+developer.seed@skylance.local(TestSeed123!)
+# **Customization plan: Transform Zero Cost CRM into your three-role business CRM**
+
+Now that the CRM is running, we should stop thinking about building a new application. We should treat the existing application as our foundation and progressively transform it into your actual business workflow.
+
+I inspected the current Zero Cost CRM repository, including its architecture, database schema, authentication, API endpoints and frontend navigation.
+
+**The good news:** We can reuse a significant portion of the application. We do not need to rebuild authentication, lead creation, contacts, follow-ups, dashboards or the entire frontend.&#x20;
+
+[image](https://www.google.com/s2/favicons?domain=https://raw.githubusercontent.com\&sz=32)
+
+GitHub+2
+
+
+
+The existing stack is already close to your development experience:
+
+- Frontend: React, TypeScript and Tailwind CSS.
+- Backend: Node.js and Express.
+- Database: PostgreSQL.
+- Existing functionality: Leads, contacts, pipeline, activities, user management and call recordings.&#x20;
+
+  [image](https://www.google.com/s2/favicons?domain=https://github.com\&sz=32)
+
+  GitHub+1
+
+
+
+I recommend doing this in **six development phases**.
+
+## **1. First, understand what we are modifying**
+
+Here is the existing application structure:
+
+## **Existing Zero Cost CRM**
+
+**Frontend —&#x20;**`src/`
+
+Dashboard, Pipeline, Contacts, Import, Users, Settings and navigation.
+
+**Backend —&#x20;**`server/`
+
+Authentication, API endpoints, company and contact operations, activity tracking and recordings.
+
+**Database —&#x20;**`sql/schema.sql`
+
+Users, companies, contacts, activity events, conversations and application settings.
+
+This structure is documented in the repository's architecture guide.&#x20;
+
+[image](https://www.google.com/s2/favicons?domain=https://raw.githubusercontent.com\&sz=32)
+
+GitHub+1
+
+
+
+These are the important files you will encounter:
+
+| File                         | Why we need it                                 |
+| ---------------------------- | ---------------------------------------------- |
+| `src/App.tsx`                | Main application navigation and page rendering |
+| `src/types.ts`               | User roles, company and contact types          |
+| `src/components/Sidebar.tsx` | Navigation menu                                |
+| `src/hooks/useAuth.ts`       | Logged-in user information                     |
+| `src/hooks/useCrmStore.ts`   | CRM data handling                              |
+| `server/app.ts`              | Main backend APIs                              |
+| `server/auth.ts`             | Authentication and role checks                 |
+| `server/activity.ts`         | Activity history                               |
+| `sql/schema.sql`             | PostgreSQL database structure                  |
+
+We should keep the existing architecture rather than introducing a new framework or backend.
+
+## **2. Phase 01 — Simplify the existing CRM**
+
+Start here
+
+Before adding anything, remove the unnecessary complexity from the existing application.
+
+The current CRM is designed for an SDR sales workflow, with a 13-stage sales pipeline involving demos, POCs, negotiations and commercial proposals.&#x20;
+
+[image](https://www.google.com/s2/favicons?domain=https://github.com\&sz=32)
+
+GitHub+1
+
+
+
+Your business does not need all those stages.
+
+### **Replace the existing pipeline**
+
+I recommend these stages:
+
+## **Your new lead pipeline**
+
+1. **New Lead** — Client registered.
+2. **Contacted** — Initial communication completed.
+3. **Follow-up** — More communication required.
+4. **Qualified** — Client requirements understood and opportunity confirmed.
+5. **Handoff Submitted** — Sent to the developer team.
+6. **Converted** — Opportunity successfully accepted.
+7. **Not Interested** — Client declined or is unsuitable.
+
+### **Simplify the contact statuses**
+
+| Existing concept         | Your version       |
+| ------------------------ | ------------------ |
+| Not Contacted            | Not Contacted      |
+| Didn't Pick              | No Answer          |
+| Connected - Got Referral | Connected          |
+| Interested               | Interested         |
+| Follow-up Required       | Follow-up Required |
+| Rejected                 | Not Interested     |
+| Wrong/Bad Number         | Wrong Number       |
+
+The existing application already supports configurable pipeline stages and contact statuses through its Settings page. We should use that functionality before modifying code.&#x20;
+
+[image](https://www.google.com/s2/favicons?domain=https://raw.githubusercontent.com\&sz=32)
+
+GitHub+1
+
+
+
+We should also simplify the lead registration form.
+
+**Keep:**
+
+- Client name.
+- Company name.
+- Phone number.
+- Email.
+- Location.
+- Business type.
+- Lead source.
+- Initial requirements.
+- Assigned caller.
+
+**Remove from the visible form:**
+
+- Estimated call volume.
+- Employee count, unless needed.
+- SaaS-specific discovery fields.
+- Unnecessary sales-specific fields.
+
+Do not delete existing database columns just because we no longer display them. We can hide those fields and preserve compatibility.
+
+## **3. Phase 02 — Transform the existing user roles**
+
+This is the first actual code customization.
+
+Currently, the repository supports `founder`, `admin` and `sdr` roles.&#x20;
+
+[image](https://www.google.com/s2/favicons?domain=https://raw.githubusercontent.com\&sz=32)
+
+GitHub+1
+
+
+
+We should map them like this:
+
+| Existing role | New displayed role | Purpose                                      |
+| ------------- | ------------------ | -------------------------------------------- |
+| founder       | Admin              | Highest-level ownership                      |
+| admin         | Admin              | Complete system administration               |
+| sdr           | Caller             | Lead acquisition and follow-ups              |
+| New role      | Developer          | Project evaluation and technical information |
+
+**Important:** Keep the existing `sdr` database role internally and simply display it as `Caller` in the interface. Add `developer` as a new database role. This avoids unnecessarily changing existing accounts.
+
+Changes will be required in:
+
+1. `server/auth.ts` — permitted role definitions.
+2. `src/types.ts` — frontend role definitions.
+3. `sql/schema.sql` — user role constraint.
+4. User management screen — role selection.
+5. `server/auth.ts` — permission middleware.
+6. `src/App.tsx` and sidebar — role-specific navigation.
+
+There is an important security issue to address here.
+
+The current `/api/bootstrap` endpoint returns all companies and contacts to authenticated users, while the company creation endpoint assigns the creating user as the company owner. Therefore, hiding other callers' leads in the frontend alone would not protect their information.&#x20;
+
+[image](https://www.google.com/s2/favicons?domain=https://raw.githubusercontent.com\&sz=32)
+
+GitHub+1
+
+
+
+We must implement actual backend restrictions.
+
+### **The three permission groups**
+
+**Caller**
+
+- Create leads and contacts.
+- View their assigned leads.
+- Log calls and schedule follow-ups.
+- Update lead information.
+- Submit qualified leads to developers.
+- View their submitted handoffs.
+
+**Developer**
+
+- View assigned handoffs.
+- Access client requirements.
+- View relevant client documents.
+- Add technical observations.
+- Submit estimates and project details.
+- Request clarification.
+- Update technical evaluation status.
+
+**Admin**
+
+- View all leads and users.
+- Assign developers.
+- Review every handoff.
+- View all documents and activity history.
+- Approve and reject submissions.
+- Manage users and permissions.
+- View reports and performance.
+
+## **4. Phase 03 — Develop the caller's actual workflow**
+
+This is where we turn the existing sales CRM into your calling and lead-management CRM.
+
+We will reuse the existing:
+
+- Company records.
+- Contact records.
+- Contact status management.
+- Follow-up dates.
+- Activity history.
+- Lead assignment.
+
+### **New caller dashboard**
+
+**Caller Workspace**
+
+Proposed design
+
+My Leads
+
+# **48**
+
+Calls Today
+
+# **32**
+
+Follow-ups
+
+# **12**
+
+Qualified Leads
+
+# **8**
+
+**Main navigation**
+
+&#x20;Dashboard
+
+&#x20;My Leads
+
+&#x20;Call History
+
+&#x20;Follow-ups
+
+&#x20;Submitted Leads
+
+Illustrative dashboard using sample numbers, not live CRM data.
+
+### **One missing feature: proper call records**
+
+The existing CRM tracks activity and optional call recordings, but the documented API doesn't expose a dedicated structured call-log resource.&#x20;
+
+[image](https://www.google.com/s2/favicons?domain=https://raw.githubusercontent.com\&sz=32)
+
+GitHub+1
+
+
+
+I recommend introducing a simple `call_logs` table.
+
+Each call should store:
+
+| Field          | Example                |
+| -------------- | ---------------------- |
+| Caller         | User ID                |
+| Client         | Client reference       |
+| Call date      | 17 November 2026       |
+| Outcome        | Interested             |
+| Notes          | Client wants a website |
+| Next follow-up | 19 November 2026       |
+| Duration       | 5 minutes              |
+
+This will allow the admin to see exactly how callers are communicating with clients.
+
+Do not confuse a call recording with a call record. A recording is an audio file; a call record is the structured history of that interaction.
+
+## **5. Phase 04 — Build the developer handoff module**
+
+Most important new module
+
+This is the feature that converts your existing CRM into your actual business application.
+
+I would create three new database entities:
+
+| Entity              | Purpose                                |
+| ------------------- | -------------------------------------- |
+| `project_handoffs`  | Stores submitted project information   |
+| `project_documents` | Stores supporting document metadata    |
+| `project_updates`   | Tracks developer comments and progress |
+
+### **How it should work**
+
+## **Caller-to-developer process**
+
+**1. Caller submits lead**
+
+Client information, requirements, budget, timeline and attachments.
+
+**2. Admin receives submission**
+
+Checks information and assigns the appropriate developer.
+
+**3. Developer reviews**
+
+Reads requirements, checks documents, adds technical details and estimates.
+
+**4. Admin reviews evaluation**
+
+Accepts, rejects or returns the evaluation for clarification.
+
+**5. Final outcome**
+
+Approved
+
+Rejected
+
+Clarification required
+
+### **Project handoff form**
+
+I would use these fields:
+
+**Client information**
+
+- Client name.
+- Company.
+- Phone number.
+- Email.
+- Original lead reference.
+
+**Project information**
+
+- Project title.
+- Type of project.
+- Detailed description.
+- Functional requirements.
+- Preferred technology, if known.
+- Expected budget.
+- Expected timeline.
+- Additional comments.
+
+**Documents**
+
+- Client reference documents.
+- Existing website or application links.
+- Images and PDFs.
+- Supporting files.
+
+**Administrative information**
+
+- Submitted by.
+- Assigned developer.
+- Submission date.
+- Current status.
+
+### **Developer evaluation form**
+
+The developer should receive the same client information but have a separate editable section.
+
+| Field                  | Developer input         |
+| ---------------------- | ----------------------- |
+| Technical feasibility  | Feasible / Not feasible |
+| Suggested technology   | Proposed stack          |
+| Estimated effort       | Development duration    |
+| Estimated cost         | Technical estimate      |
+| Technical requirements | Additional requirements |
+| Clarifications         | Questions for caller    |
+| Evaluation notes       | Developer observations  |
+
+The original client information should remain protected from accidental modification.
+
+## **6. Phase 05 — Build the admin dashboard**
+
+We can reuse the existing dashboard, Activity, Users and Settings components.
+
+The admin dashboard should become the central monitoring location.
+
+## **Admin monitoring dashboard**
+
+Total Leads
+
+# **125**
+
+Active Projects
+
+# **24**
+
+Pending Handoffs
+
+# **8**
+
+Completed Reviews
+
+# **17**
+
+**Monitoring sections**
+
+| Section       | What admin sees                   |
+| ------------- | --------------------------------- |
+| Callers       | Leads, calls, performance         |
+| Developers    | Assigned projects, reviews        |
+| Lead pipeline | Every lead and status             |
+| Handoffs      | Pending and completed             |
+| Documents     | Uploaded files and review history |
+| Activity      | Every important user action       |
+
+These numbers are only layout examples.
+
+## **7. Phase 06 — Testing and security**
+
+This phase is particularly important because your CRM will contain client information and internal project documents.
+
+We need to test these conditions:
+
+| Test                                           | Expected result                   |
+| ---------------------------------------------- | --------------------------------- |
+| Caller A logs in                               | Sees only assigned leads          |
+| Caller B tries Caller A's lead API             | Access denied                     |
+| Caller submits a handoff                       | Admin receives it                 |
+| Admin assigns developer                        | Assigned developer can access it  |
+| Developer accesses another developer's handoff | Access denied                     |
+| Developer changes client information           | Access denied                     |
+| Developer submits technical evaluation         | Admin receives update             |
+| Admin rejects a handoff                        | Reason and history are preserved  |
+| Admin views activity                           | Complete activity history visible |
+
+Documents should also use private storage and authorization checks. Never expose internal file locations or public unrestricted links.
+
+The current repository already includes testing commands such as `npm test`, `npm run ci`, and `make test-api`. We should extend these tests for the new roles and workflow.&#x20;
+
+[image](https://www.google.com/s2/favicons?domain=https://github.com\&sz=32)
+
+GitHub+1
+
+
+
+# **8. Actual development order**
+
+I would arrange the implementation into these tasks.
+
+**Implementation checklist**
+
+0/13 completed
+
+**Preparation**
+
+Create a custom Git branch and back up the database
+
+Study existing pages, API routes and database models
+
+**Existing CRM**
+
+Configure company branding and simplified pipeline
+
+Simplify lead creation and contact forms
+
+**Permissions**
+
+Add Developer role and retain Caller mapping
+
+Implement backend role and record-level access control
+
+**Caller**
+
+Add structured call logging
+
+Implement the caller dashboard and lead workflow
+
+**Handoff**
+
+Create project handoff and document records
+
+**Developer**
+
+Create developer workspace and technical evaluation
+
+**Admin**
+
+Create admin assignment and approval workflow
+
+Integrate reports, notifications and activity history
+
+**Testing**
+
+Run role-based tests and deployment checks
+
+I would not try to implement all 13 tasks in one AI coding-agent prompt. Implement one phase, test it, commit it, and move to the next.
+
+# **9. How to use your AI coding agent for this project**
+
+Since the CRM is already working, the first thing I would do is use Cursor, Claude Code or Codex to audit the existing codebase.
+
+Start with this prompt.
+
+# Task 01 — Existing CRM Architecture Audit
+
+We have an existing running application based on Zero Cost CRM.
+
+Our objective is to customize it into a simple three-role business CRM.
+
+## Target roles
+
+1. Caller
+2. Developer
+3. Admin
+
+## Business workflow
+
+Caller registers clients as leads, makes calls, records conversations, schedules follow-ups and qualifies potential projects.
+
+Once a lead is qualified, the caller submits its information to the developer team.
+
+The admin supervises the entire process, assigns developers, reviews project information and documents, and controls user permissions.
+
+## Instructions
+
+Before changing any code, inspect the complete existing repository.
+
+Analyze:
+
+1. Current frontend pages and component structure.
+2. Existing authentication and authorization.
+3. Current user roles and role checks.
+4. Existing lead and contact models.
+5. Existing database relationships.
+6. Current API endpoints.
+7. Existing activity tracking and call-recording functionality.
+8. Current dashboard and sidebar navigation.
+9. Current tests and development commands.
+
+## Deliverables
+
+Create:
+
+- documentation/CURRENT_ARCHITECTURE.md
+- documentation/REUSABLE_FEATURES.md
+- documentation/REQUIRED_MODIFICATIONS.md
+- documentation/PROPOSED_DATABASE_DESIGN.md
+- documentation/IMPLEMENTATION_PLAN.md
+
+For every proposed modification, identify the relevant existing file and explain what must change.
+
+Classify features as:
+
+- Reuse without modification
+- Configure existing functionality
+- Modify existing functionality
+- Build new functionality
+
+## Important restrictions
+
+- Do not modify any source files.
+- Do not delete existing functionality.
+- Do not modify the database.
+- Do not change authentication.
+- Do not redesign the frontend.
+- Do not install unnecessary dependencies.
+
+First produce the architecture report and wait for implementation instructions.
+
+## **10. Important precautions before starting**
+
+1. Create a separate Git branch for this customization.
+2. Back up your database before schema modifications.
+3. Keep your original repository intact.
+4. Never run `make reset-demo` against a database containing real business data; it is a demo reset operation.
+5. Do not expose `.env` files or credentials to an AI coding agent unnecessarily.
+6. Review every database permission change and test it using separate user accounts.
+
+The current repository uses an idempotent `sql/schema.sql` rather than a numbered migration system, so database changes need to remain repeatable and compatible with existing installations.&#x20;
+
+[image](https://www.google.com/s2/favicons?domain=https://raw.githubusercontent.com\&sz=32)
+
+GitHub+1
+
+
+
+## **My final recommendation**
+
+Do not redesign the whole application yet. Do not change the tech stack. Do not rewrite the backend.
+
+Your first milestone should be:
+
+First development milestone
+
+**A fully functional Caller module**
+
+The caller should be able to:
+
+- Log in.
+- Create a client.
+- Record a call.
+- Update the client's status.
+- Schedule a follow-up.
+- Qualify the lead.
+- Submit it to the developer team.
+
+Once this works, the developer and admin modules can be built around it.
+
+**One thing I need from your running application:** upload your current project as a ZIP, excluding `node_modules`, `.env` files, database backups containing sensitive data and credentials.
+
+I can then inspect the actual code you are running rather than relying only on the public repository's latest version, and produce a file-by-file modification plan with the exact components, APIs and database changes needed.

@@ -53,14 +53,26 @@ const env = {
   PGDATABASE: url.pathname.replace(/^\//, ''),
 };
 
-function runSql(file) {
+async function runSql(file) {
   const abs = resolve(process.cwd(), file);
   console.log(`Applying ${file} → ${env.PGUSER}@${env.PGHOST}:${env.PGPORT}/${env.PGDATABASE}`);
   const r = spawnSync('psql', ['-v', 'ON_ERROR_STOP=1', '-f', abs], { env, encoding: 'utf8' });
-  if (r.stdout) process.stdout.write(r.stdout);
-  if (r.stderr) process.stderr.write(r.stderr);
-  if (r.status !== 0) process.exit(r.status ?? 1);
+  if (r.status === 0) {
+    if (r.stdout) process.stdout.write(r.stdout);
+    return;
+  }
+  // Fall back to node-pg if psql CLI is not installed or failed
+  const { default: pg } = await import('pg');
+  const sql = readFileSync(abs, 'utf8');
+  const client = new pg.Client({ connectionString: parseDbUrl(raw), ssl: false });
+  await client.connect();
+  try {
+    await client.query(sql);
+    console.log('Schema applied via node-pg.');
+  } finally {
+    await client.end();
+  }
 }
 
-runSql('sql/schema.sql');
+await runSql('sql/schema.sql');
 console.log('Done.');

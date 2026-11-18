@@ -85,9 +85,9 @@ export function asDiscoveryQuestions(value: unknown): DiscoveryQuestion[] {
 
 function rowToSettings(row: Record<string, unknown>): AppSettings {
   return {
-    brandName: String(row.brand_name ?? DEFAULT_BRAND_NAME),
-    brandTagline: String(row.brand_tagline ?? DEFAULT_BRAND_TAGLINE),
-    logoUrl: String(row.logo_url ?? DEFAULT_LOGO_URL),
+    brandName: String(row.brand_name || DEFAULT_BRAND_NAME),
+    brandTagline: String(row.brand_tagline || DEFAULT_BRAND_TAGLINE),
+    logoUrl: String(row.logo_url || DEFAULT_LOGO_URL),
     stages: asStringArray(row.stages, DEFAULT_STAGES),
     contactStatuses: asStringArray(row.contact_statuses, DEFAULT_CONTACT_STATUSES),
     championStatusToStage: asChampionMap(row.champion_status_to_stage),
@@ -99,9 +99,9 @@ function rowToSettings(row: Record<string, unknown>): AppSettings {
 
 function defaultSettingsFromEnv(): AppSettings {
   return {
-    brandName: readEnv('BRAND_NAME') ?? DEFAULT_BRAND_NAME,
-    brandTagline: readEnv('BRAND_TAGLINE') ?? DEFAULT_BRAND_TAGLINE,
-    logoUrl: readEnv('BRAND_LOGO_URL') ?? DEFAULT_LOGO_URL,
+    brandName: readEnv('BRAND_NAME') || DEFAULT_BRAND_NAME,
+    brandTagline: readEnv('BRAND_TAGLINE') || DEFAULT_BRAND_TAGLINE,
+    logoUrl: readEnv('BRAND_LOGO_URL') || DEFAULT_LOGO_URL,
     stages: [...DEFAULT_STAGES],
     contactStatuses: [...DEFAULT_CONTACT_STATUSES],
     championStatusToStage: { ...DEFAULT_CHAMPION_STATUS_TO_STAGE },

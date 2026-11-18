@@ -46,8 +46,12 @@ import {
 } from '../lib/progress';
 import { buildCardBadges, buildChampionTrail, findChampion, istToday } from '../lib/championCard';
 import { logViewEvent } from '../lib/activity';
+import { api } from '../lib/api';
+import type { ProjectDocument } from '../lib/projects';
 import { CompanyForm } from './CompanyForm';
 import { ContactForm } from './ContactForm';
+import { SubmitHandoffModal } from './SubmitHandoffModal';
+import { DocumentViewerModal } from './DocumentViewerModal';
 import {
   EmptyState,
   FilterChip,
@@ -106,6 +110,8 @@ function CompanyCard({
   today,
   dragging,
   onOpen,
+  onSubmitHandoff,
+  onViewDoc,
 }: {
   company: Company;
   contacts: Contact[];
@@ -113,6 +119,8 @@ function CompanyCard({
   today: string;
   dragging?: boolean;
   onOpen?: () => void;
+  onSubmitHandoff?: (company: Company) => void;
+  onViewDoc?: (company: Company) => void;
 }) {
   const badges = buildCardBadges(company, contacts, today);
   const trail = buildChampionTrail(findChampion(contacts, company.id));
@@ -123,8 +131,8 @@ function CompanyCard({
     <div
       data-testid="company-card"
       data-company-id={company.id}
-      className={`rounded-none border border-[var(--color-line)] bg-white p-3 text-left transition hover:border-teal-600/40 ${
-        dragging ? 'opacity-40' : ''
+      className={`rounded-xl border border-slate-200/90 bg-white p-3.5 text-left shadow-2xs transition hover:border-slate-300 hover:shadow-md ${
+        dragging ? 'opacity-40 scale-[0.98]' : ''
       }`}
     >
       <div className="flex items-start justify-between gap-2">
@@ -132,30 +140,35 @@ function CompanyCard({
           type="button"
           onClick={onOpen}
           onPointerDown={(e) => e.stopPropagation()}
-          className="min-w-0 flex-1 text-left"
+          className="min-w-0 flex-1 text-left cursor-pointer"
         >
-          <p className="text-sm font-semibold text-stone-900">{company.companyName}</p>
-          <p className="mt-1 text-[11px] text-stone-500">
+          <p className="text-sm font-bold text-slate-900 leading-snug hover:text-teal-700 transition">{company.companyName}</p>
+          <p className="mt-0.5 text-[11px] text-slate-500">
             {[company.industry, company.location].filter(Boolean).join(' · ') || '—'}
           </p>
           <div
             data-testid="card-badges"
             data-company-id={company.id}
-            className="mt-2 flex flex-wrap items-center gap-1"
+            className="mt-2 flex flex-wrap items-center gap-1.5"
           >
-            <span className="rounded-none bg-stone-100 px-1.5 py-0.5 text-[10px] font-semibold text-stone-500">
+            {company.sourceLink ? (
+              <span className="rounded-md bg-indigo-50 border border-indigo-200/80 px-1.5 py-0.5 text-[10px] font-bold text-indigo-700" title={`Lead Source: ${company.sourceLink}`}>
+                📢 {company.sourceLink}
+              </span>
+            ) : null}
+            <span className="rounded-md bg-slate-100 px-1.5 py-0.5 text-[10px] font-semibold text-slate-600">
               {badges.contactCount} {badges.contactCount === 1 ? 'contact' : 'contacts'}
             </span>
             {badges.hasChampion ? (
               <span
-                className="rounded-none bg-teal-100 px-1.5 py-0.5 text-[10px] font-semibold text-teal-800"
-                title="Has champion"
+                className="rounded-md bg-teal-50 border border-teal-200 px-1.5 py-0.5 text-[10px] font-bold text-teal-800"
+                title="Has key contact"
               >
                 ★ Champion
               </span>
             ) : null}
             {badges.followUpDueToday ? (
-              <span className="rounded-none bg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold text-amber-800">
+              <span className="rounded-md bg-amber-50 border border-amber-200 px-1.5 py-0.5 text-[10px] font-bold text-amber-800 animate-pulse">
                 Due today
               </span>
             ) : null}
@@ -163,19 +176,19 @@ function CompanyCard({
           <p
             data-testid="card-progress"
             data-company-id={company.id}
-            className="mt-1.5 flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-[10px] text-stone-500"
+            className="mt-2 flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-[10px] text-slate-500"
           >
-            <span className={`rounded-none px-1.5 py-0.5 font-semibold ${PROGRESS_TONE[progress]}`}>
+            <span className={`rounded-md px-1.5 py-0.5 font-bold ${PROGRESS_TONE[progress]}`}>
               {companyProgressLabel(progress)}
             </span>
             {summary.total > 0 ? (
-              <span>
+              <span className="font-medium text-slate-600">
                 {summary.dialed}/{summary.total} dialed
               </span>
             ) : null}
             {summary.whatsappDue > 0 ? (
               <span
-                className={summary.whatsappPending > 0 ? 'font-semibold text-rose-700' : ''}
+                className={summary.whatsappPending > 0 ? 'font-bold text-rose-700' : 'text-slate-500'}
                 title="WhatsApp sent / dialed contacts that should get it"
               >
                 · WA {summary.whatsappSent}/{summary.whatsappDue}
@@ -186,34 +199,78 @@ function CompanyCard({
             <div
               data-testid="champion-trail"
               data-company-id={company.id}
-              className="mt-2 space-y-0.5"
+              className="mt-2 rounded-md bg-slate-50 border border-slate-100 p-2 space-y-0.5"
             >
-              <p className="text-[11px] font-medium text-teal-800">{trail.header}</p>
-              {trail.note ? <p className="text-[10px] text-stone-500">{trail.note}</p> : null}
+              <p className="text-[11px] font-bold text-teal-800">{trail.header}</p>
+              {trail.note ? <p className="text-[10px] text-slate-600 leading-tight line-clamp-2">{trail.note}</p> : null}
               {trail.followUp ? (
-                <p className="text-[10px] text-stone-400">{trail.followUp}</p>
+                <p className="text-[10px] text-slate-500">{trail.followUp}</p>
               ) : null}
             </div>
           ) : null}
           {company.nextFollowUp ? (
-            <p className="mt-1.5 text-[10px] text-stone-400">Follow-up {company.nextFollowUp}</p>
+            <p className="mt-1.5 text-[10px] font-medium text-slate-500">Follow-up: <span className="font-semibold text-slate-700">{company.nextFollowUp}</span></p>
           ) : null}
           {company.createdAt ? (
-            <p className="mt-1 text-[10px] text-stone-400">
+            <p className="mt-1 text-[10px] text-slate-400">
               <RelativeTimestamp value={company.createdAt} prefix="Added " />
             </p>
           ) : null}
+
+          {company.hasDocument || company.hasQuotation ? (
+            <div className="mt-2 flex items-center justify-between rounded-md bg-teal-50 border border-teal-200/90 px-2 py-1 text-[10px] font-bold text-teal-900 shadow-2xs">
+              <span className="truncate max-w-[130px] flex items-center gap-1" title={company.primaryDocumentName || 'Quotation Attached'}>
+                <span>📎</span> {company.primaryDocumentName || 'Quotation Attached'}
+              </span>
+              <button
+                type="button"
+                className="text-[10px] text-teal-700 underline font-bold hover:text-teal-950 cursor-pointer ml-1.5"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onViewDoc?.(company);
+                }}
+                onPointerDown={(e) => e.stopPropagation()}
+              >
+                👁️ View
+              </button>
+            </div>
+          ) : null}
+          {company.stage === 'Qualified' ? (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                onSubmitHandoff?.(company);
+              }}
+              onPointerDown={(e) => e.stopPropagation()}
+              className="mt-2.5 flex w-full items-center justify-center gap-1.5 rounded-lg bg-teal-50 border border-teal-200 py-1.5 text-[11px] font-bold text-teal-800 transition hover:bg-teal-100 cursor-pointer shadow-2xs"
+            >
+              <span>📄</span> Submit Quotation & Scope →
+            </button>
+          ) : null}
+          {company.stage === 'Handoff Submitted' ? (
+            <div className="mt-2 flex items-center justify-between rounded-md bg-purple-50 border border-purple-200 px-2 py-1 text-[10px] font-bold text-purple-800">
+              <span>📄 Quotation & Scope Submitted</span>
+              <span className="text-[9px] font-semibold text-purple-600">Awaiting Client/Admin</span>
+            </div>
+          ) : null}
+          {company.stage === 'Converted' ? (
+            <div className="mt-2 flex items-center justify-between rounded-md bg-emerald-50 border border-emerald-200 px-2 py-1 text-[10px] font-bold text-emerald-800">
+              <span>✓ Converted to Project</span>
+              <span className="text-[9px] font-semibold text-emerald-600">Active</span>
+            </div>
+          ) : null}
         </button>
-        <div className="flex shrink-0 flex-col items-end gap-1">
+        <div className="flex shrink-0 flex-col items-end gap-1.5">
           {company.intent ? (
             <span
-              className={`rounded-none px-2 py-0.5 text-[10px] font-semibold ${intentColor(company.intent)}`}
+              className={`rounded-md px-2 py-0.5 text-[10px] font-bold ${intentColor(company.intent)}`}
             >
               {company.intent}
             </span>
           ) : null}
           <span
-            className="rounded-none px-1.5 py-0.5 text-[10px] font-medium text-stone-400"
+            className="flex h-6 w-6 items-center justify-center rounded-md text-xs text-slate-400 hover:bg-slate-100 hover:text-slate-600 transition"
             title="Drag card to move stage"
           >
             ⠿
@@ -230,12 +287,16 @@ function DraggableCard({
   stages,
   today,
   onOpen,
+  onSubmitHandoff,
+  onViewDoc,
 }: {
   company: Company;
   contacts: Contact[];
   stages: readonly string[];
   today: string;
   onOpen: () => void;
+  onSubmitHandoff?: (company: Company) => void;
+  onViewDoc?: (company: Company) => void;
 }) {
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
     id: company.id,
@@ -261,6 +322,8 @@ function DraggableCard({
         today={today}
         dragging={isDragging}
         onOpen={onOpen}
+        onSubmitHandoff={onSubmitHandoff}
+        onViewDoc={onViewDoc}
       />
     </div>
   );
@@ -273,6 +336,8 @@ function KanbanColumn({
   stages,
   today,
   onOpen,
+  onSubmitHandoff,
+  onViewDoc,
 }: {
   stage: Stage;
   companies: Company[];
@@ -280,23 +345,25 @@ function KanbanColumn({
   stages: readonly string[];
   today: string;
   onOpen: (c: Company) => void;
+  onSubmitHandoff?: (company: Company) => void;
+  onViewDoc?: (company: Company) => void;
 }) {
   const { setNodeRef, isOver } = useDroppable({ id: stage, data: { type: 'column', stage } });
 
   return (
     <div
       ref={setNodeRef}
-      className={`flex w-[min(72vw,16rem)] shrink-0 flex-col rounded-none border border-[var(--color-line)] border-t-4 bg-[var(--color-panel)]/70 sm:w-64 ${stageAccent(stage)} ${
-        isOver ? 'ring-2 ring-teal-600/30' : ''
+      className={`flex w-[min(76vw,17.5rem)] shrink-0 flex-col rounded-2xl border border-slate-200/90 bg-slate-100/60 p-2 sm:w-72 shadow-2xs ${stageAccent(stage)} ${
+        isOver ? 'ring-2 ring-teal-600/40 bg-teal-50/20' : ''
       }`}
     >
       <div className="flex items-center justify-between px-3 py-2.5">
-        <h3 className="text-xs font-semibold tracking-wide text-stone-700 uppercase">{stage}</h3>
-        <span className="rounded-none bg-stone-100 px-2 py-0.5 text-[10px] font-semibold text-stone-500">
+        <h3 className="text-xs font-bold tracking-wider text-slate-700 uppercase">{stage}</h3>
+        <span className="rounded-full bg-slate-200/90 px-2.5 py-0.5 text-xs font-bold text-slate-700">
           {companies.length}
         </span>
       </div>
-      <div className="flex min-h-[8rem] max-h-[min(52dvh,28rem)] flex-col gap-2 overflow-y-auto px-2.5 pb-3 kanban-scroll sm:max-h-[calc(100vh-14rem)]">
+      <div className="flex min-h-[10rem] max-h-[min(54dvh,32rem)] flex-col gap-2.5 overflow-y-auto p-1 kanban-scroll sm:max-h-[calc(100vh-14rem)]">
         {companies.map((c) => (
           <DraggableCard
             key={c.id}
@@ -305,10 +372,14 @@ function KanbanColumn({
             stages={stages}
             today={today}
             onOpen={() => onOpen(c)}
+            onSubmitHandoff={onSubmitHandoff}
+            onViewDoc={onViewDoc}
           />
         ))}
         {companies.length === 0 ? (
-          <p className="px-1 py-6 text-center text-[11px] text-stone-400">Drop cards here</p>
+          <div className="flex flex-1 items-center justify-center rounded-xl border border-dashed border-slate-300/80 py-10">
+            <p className="text-xs font-medium text-slate-400">Drop leads here</p>
+          </div>
         ) : null}
       </div>
     </div>
@@ -325,7 +396,9 @@ export function Pipeline({
   onEditingCompanyChange,
 }: PipelineProps) {
   const [saved] = useState(() => loadPipelineState(sessionStorageOrNull()));
-  const [view, setView] = useState<PipelineView>(saved.view);
+  const [view, setView] = useState<PipelineView>(
+    saved.view === 'All Companies' ? 'All Leads' : saved.view
+  );
   const [filters, setFilters] = useState<PipelineFilters>(saved.filters);
   const [searchDraft, setSearchDraft] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
@@ -337,6 +410,9 @@ export function Pipeline({
   const [openContact, setOpenContact] = useState<Contact | null>(null);
   const [creating, setCreating] = useState(false);
   const [activeId, setActiveId] = useState<string | null>(null);
+  const [handoffModalCompany, setHandoffModalCompany] = useState<Company | null>(null);
+  const [pipelineError, setPipelineError] = useState<string | null>(null);
+  const [pipelineSuccess, setPipelineSuccess] = useState<string | null>(null);
   const searchWrapRef = useRef<HTMLDivElement>(null);
 
   const openCompany = (c: Company) => {
@@ -351,6 +427,13 @@ export function Pipeline({
   const closeEditing = () => {
     setEditing(null);
     onEditingCompanyChange?.(null);
+  };
+
+  const onCompanySaved = () => {
+    closeEditing();
+    if (view !== 'All Leads' && view !== 'All Companies') {
+      setView('All Leads');
+    }
   };
 
   useEffect(() => {
@@ -460,6 +543,41 @@ export function Pipeline({
     [filtered, store.contacts, stages]
   );
 
+  const [viewingDoc, setViewingDoc] = useState<ProjectDocument | null>(null);
+
+  const openCompanyDoc = async (company: Company) => {
+    try {
+      const res = await api<{ documents: ProjectDocument[] }>(`/api/project-documents?leadId=${company.id}`);
+      if (res.documents && res.documents.length > 0) {
+        setViewingDoc(res.documents[0]);
+      } else if (company.primaryDocumentId) {
+        setViewingDoc({
+          id: company.primaryDocumentId,
+          filename: company.primaryDocumentName || 'Quotation Document',
+          type: company.primaryDocumentType || 'quotation',
+          contentType: company.primaryDocumentName?.toLowerCase().endsWith('.pdf') ? 'application/pdf' : 'application/octet-stream',
+          sizeBytes: 0,
+          developerVisible: false,
+          uploadedAt: new Date().toISOString(),
+          uploadedBy: '',
+        });
+      }
+    } catch {
+      if (company.primaryDocumentId) {
+        setViewingDoc({
+          id: company.primaryDocumentId,
+          filename: company.primaryDocumentName || 'Quotation Document',
+          type: company.primaryDocumentType || 'quotation',
+          contentType: company.primaryDocumentName?.toLowerCase().endsWith('.pdf') ? 'application/pdf' : 'application/octet-stream',
+          sizeBytes: 0,
+          developerVisible: false,
+          uploadedAt: new Date().toISOString(),
+          uploadedBy: '',
+        });
+      }
+    }
+  };
+
   const whatsappPendingContacts = useMemo(
     () =>
       filtered.reduce((n, c) => n + (byCompany.get(c.id) ?? []).filter(whatsAppPending).length, 0),
@@ -470,7 +588,7 @@ export function Pipeline({
 
   const today = istToday();
   const filtersActive = pipelineFiltersAreActive(filters);
-  const isNarrowedDown = filtersActive || view !== 'All Companies';
+  const isNarrowedDown = filtersActive || (view !== 'All Companies' && view !== 'All Leads');
   const dateLabel =
     PIPELINE_DATE_RANGE_OPTIONS.find((o) => o.value === filters.dateRange)?.label ?? 'All Time';
 
@@ -484,7 +602,7 @@ export function Pipeline({
 
   const onDragStart = (e: DragStartEvent) => setActiveId(String(e.active.id));
 
-  const onDragEnd = (e: DragEndEvent) => {
+  const onDragEnd = async (e: DragEndEvent) => {
     setActiveId(null);
     const { active, over } = e;
     if (!over) return;
@@ -494,7 +612,32 @@ export function Pipeline({
 
     const company = store.companies.find((c) => c.id === companyId);
     if (company && company.stage !== stage) {
-      void store.moveCompanyStage(companyId, stage);
+      if (stage === 'Handoff Submitted') {
+        // Document Verification Checkpoint:
+        // Only require modal/upload if this lead does NOT already have a verified quotation or scope document!
+        if (!company.hasDocument && !company.hasQuotation) {
+          setHandoffModalCompany(company);
+          return;
+        }
+      }
+      // If we were filtered to a single stage, automatically switch to All Leads so the moved card remains visible!
+      if (view !== 'All Leads' && view !== 'All Companies') {
+        setView('All Leads');
+      }
+      setPipelineError(null);
+      setPipelineSuccess(null);
+      try {
+        await store.moveCompanyStage(companyId, stage);
+        if (stage === 'Converted' || stage === 'Closed Won') {
+          setPipelineSuccess(`Converted "${company.companyName}"! Added to Admin project distribution queue.`);
+        } else if (stage === 'Handoff Submitted') {
+          setPipelineSuccess(`Moved "${company.companyName}" to Handoff Submitted (Verified Document: ${company.primaryDocumentName || 'Quotation Attached'}).`);
+        } else {
+          setPipelineSuccess(`Moved "${company.companyName}" to ${stage}.`);
+        }
+      } catch (err) {
+        setPipelineError(err instanceof Error ? err.message : 'Failed to move lead stage');
+      }
     }
   };
 
@@ -531,17 +674,29 @@ export function Pipeline({
             Pipeline
           </p>
           <h1 className="mt-1 font-[family-name:var(--font-display)] text-3xl text-stone-900 sm:text-4xl">
-            Sales Pipeline
+            Lead Pipeline
           </h1>
           <p className="mt-1 text-sm text-stone-500">
-            Search companies, filter by calling progress or when they were added, and track the
-            pipeline.
+            Track each client lead from first contact through qualification and handoff.
           </p>
         </div>
         <button type="button" className={btnPrimary} onClick={() => setCreating(true)}>
-          + Add company
+          + Add Lead
         </button>
       </header>
+
+      {pipelineError ? (
+        <div role="alert" className="flex items-center justify-between rounded bg-rose-50 p-3 text-sm text-rose-700">
+          <span>{pipelineError}</span>
+          <button type="button" onClick={() => setPipelineError(null)} className="ml-2 font-bold text-rose-800">✕</button>
+        </div>
+      ) : null}
+      {pipelineSuccess ? (
+        <div role="status" className="flex items-center justify-between rounded bg-teal-50 p-3 text-sm text-teal-800">
+          <span>{pipelineSuccess}</span>
+          <button type="button" onClick={() => setPipelineSuccess(null)} className="ml-2 font-bold text-teal-900">✕</button>
+        </div>
+      ) : null}
 
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start">
         <div ref={searchWrapRef} className="relative min-w-0 flex-1">
@@ -554,15 +709,15 @@ export function Pipeline({
             }}
             onFocus={() => setSuggestOpen(true)}
             onKeyDown={onSearchKeyDown}
-            placeholder="Search companies…"
+            placeholder="Search leads…"
           />
           {suggestOpen && searchQuery.trim() ? (
             <div
               data-testid="pipeline-search-suggestions"
-              className="absolute top-full right-0 left-0 z-40 mt-1 max-h-64 overflow-auto border border-[var(--color-line)] bg-white shadow-lg"
+              className="absolute top-full right-0 left-0 z-40 mt-1.5 max-h-64 overflow-auto rounded-xl border border-slate-200 bg-white shadow-xl kanban-scroll"
             >
               {suggestions.length === 0 ? (
-                <p className="px-3 py-2 text-xs text-stone-400">No companies found</p>
+                <p className="px-3.5 py-3 text-xs text-slate-400">No matching leads found</p>
               ) : (
                 suggestions.map((c, i) => (
                   <button
@@ -571,13 +726,14 @@ export function Pipeline({
                     data-testid="pipeline-search-suggestion"
                     onMouseEnter={() => setHighlight(i)}
                     onClick={() => pickSuggestion(c)}
-                    className={`flex w-full flex-col gap-0.5 px-3 py-2 text-left text-xs transition ${
-                      i === highlight ? 'bg-teal-50' : 'hover:bg-stone-50'
+                    className={`flex w-full flex-col gap-0.5 px-3.5 py-2.5 text-left text-xs transition cursor-pointer ${
+                      i === highlight ? 'bg-teal-50 text-teal-900' : 'hover:bg-slate-50 text-slate-700'
                     }`}
                   >
-                    <span className="font-medium text-stone-900">{c.companyName}</span>
-                    <span className="text-stone-500">
-                      {c.stage}
+                    <span className="font-bold text-slate-900">{c.companyName}</span>
+                    <span className="text-slate-500 text-[11px]">
+                      <span className="font-semibold text-teal-800">{c.stage}</span>
+                      {c.sourceLink ? ` · 📢 ${c.sourceLink}` : ''}
                       {c.createdAt ? (
                         <>
                           {' · Added '}
@@ -651,11 +807,11 @@ export function Pipeline({
         role="group"
         aria-label="Calling progress"
       >
-        <span className="mr-1 text-[10px] font-semibold tracking-wide text-stone-400 uppercase">
+        <span className="mr-1 text-[10px] font-bold tracking-wider text-slate-400 uppercase">
           Calling progress
         </span>
         {[
-          { value: 'all' as const, label: 'All', hint: 'Every company' },
+          { value: 'all' as const, label: 'All', hint: 'Every lead' },
           ...COMPANY_PROGRESS_OPTIONS,
         ].map((o) => {
           const selected = filters.progress === o.value;
@@ -667,14 +823,14 @@ export function Pipeline({
               aria-pressed={selected}
               title={o.hint}
               onClick={() => setFilters((f) => ({ ...f, progress: o.value }))}
-              className={`shrink-0 rounded-none px-2.5 py-1 text-xs font-medium transition ${
+              className={`shrink-0 rounded-lg px-2.5 py-1 text-xs font-semibold transition cursor-pointer shadow-2xs ${
                 selected
-                  ? 'bg-stone-800 text-white'
-                  : 'bg-white text-stone-600 ring-1 ring-[var(--color-line)] hover:bg-stone-50'
+                  ? 'bg-slate-900 text-white'
+                  : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-50 hover:text-slate-900'
               }`}
             >
               {o.label}
-              <span className="ml-1.5 opacity-70" data-testid="pipeline-progress-count">
+              <span className="ml-1.5 opacity-75 font-mono" data-testid="pipeline-progress-count">
                 {progressCounts[o.value]}
               </span>
             </button>
@@ -684,16 +840,16 @@ export function Pipeline({
           type="button"
           data-testid="pipeline-whatsapp-pending"
           aria-pressed={filters.whatsappPending}
-          title="Companies with a dialed contact who hasn't been sent the WhatsApp message"
+          title="Leads with a dialed contact who has not received the WhatsApp message"
           onClick={() => setFilters((f) => ({ ...f, whatsappPending: !f.whatsappPending }))}
-          className={`ml-1 shrink-0 rounded-none px-2.5 py-1 text-xs font-medium transition ${
+          className={`ml-1 shrink-0 rounded-lg px-2.5 py-1 text-xs font-bold transition cursor-pointer shadow-2xs ${
             filters.whatsappPending
               ? 'bg-emerald-700 text-white'
-              : 'bg-emerald-50 text-emerald-800 ring-1 ring-emerald-200 hover:bg-emerald-100'
+              : 'bg-emerald-50 text-emerald-800 border border-emerald-200 hover:bg-emerald-100'
           }`}
         >
           WhatsApp pending
-          <span className="ml-1.5 opacity-70">{whatsappPendingCompanies}</span>
+          <span className="ml-1.5 opacity-80 font-mono">{whatsappPendingCompanies}</span>
         </button>
       </div>
 
@@ -727,7 +883,7 @@ export function Pipeline({
             type="button"
             data-testid="pipeline-clear-filters"
             onClick={() => setFilters(DEFAULT_PIPELINE_FILTERS)}
-            className="text-xs font-medium text-teal-800 underline-offset-2 hover:underline"
+            className="text-xs font-bold text-teal-800 underline-offset-2 hover:underline cursor-pointer"
           >
             Clear filters
           </button>
@@ -740,70 +896,78 @@ export function Pipeline({
             key={v}
             type="button"
             onClick={() => setView(v)}
-            className={`shrink-0 rounded-none px-3 py-1.5 text-xs font-medium transition ${
+            className={`shrink-0 rounded-lg px-3 py-1.5 text-xs font-bold transition cursor-pointer shadow-2xs ${
               view === v
-                ? 'bg-teal-700 text-white'
-                : 'bg-white text-stone-600 ring-1 ring-[var(--color-line)] hover:bg-stone-50'
+                ? 'bg-teal-700 text-white shadow-xs'
+                : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-50 hover:text-slate-900'
             }`}
           >
-            {v}
-            <span className="ml-1.5 opacity-70">({viewCounts.get(v) ?? 0})</span>
+            {v === 'All Companies' ? 'All Leads' : v}
+            <span className="ml-1.5 opacity-80 font-mono">({viewCounts.get(v) ?? 0})</span>
           </button>
         ))}
       </div>
 
+      {view !== 'All Leads' && view !== 'All Companies' ? (
+        <div className="flex items-center justify-between rounded-xl border border-amber-200 bg-amber-50/80 px-4 py-2 text-xs text-amber-900 shadow-2xs">
+          <span>
+            Filtered to <b>{view}</b> leads. Dragging or changing a lead&apos;s stage will automatically switch to <b>All Leads</b> so it remains visible.
+          </span>
+          <button
+            type="button"
+            onClick={() => setView('All Leads')}
+            className="ml-3 shrink-0 font-bold text-teal-800 underline hover:text-teal-950 cursor-pointer"
+          >
+            Show All Leads
+          </button>
+        </div>
+      ) : null}
+
       <section
         data-testid="pipeline-insights"
-        className="rounded-none border border-[var(--color-line)] bg-[var(--color-panel)]"
+        className="rounded-2xl border border-slate-200 bg-white shadow-2xs overflow-hidden"
       >
-        <div className="flex items-center justify-between gap-3 border-b border-[var(--color-line)] px-3 py-2">
+        <div className="flex items-center justify-between gap-3 border-b border-slate-100 px-4 py-3 bg-slate-50/60">
           <div>
-            <p className="text-[10px] font-semibold tracking-wide text-stone-400 uppercase">
-              Pipeline progress
+            <p className="text-[10px] font-bold tracking-wider text-teal-800 uppercase">
+              Pipeline Stage Metrics
             </p>
-            <p className="text-xs text-stone-600">
+            <p className="text-xs text-slate-600 font-medium">
               {dateLabel}
               {view !== 'All Companies' ? ` · ${view}` : ''}
               {' · '}
-              {insights.total} compan{insights.total === 1 ? 'y' : 'ies'}
+              <strong className="text-slate-900">{insights.total}</strong> total lead{insights.total === 1 ? '' : 's'}
             </p>
           </div>
           <button
             type="button"
             data-testid="pipeline-insights-toggle"
             onClick={() => setInsightsOpen((v) => !v)}
-            className="text-xs font-medium text-stone-500 hover:text-stone-800"
+            className="rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-xs font-semibold text-slate-600 hover:bg-slate-50 transition cursor-pointer shadow-2xs"
           >
             {insightsOpen ? 'Collapse' : 'Expand'}
           </button>
         </div>
         {insightsOpen ? (
-          <div className="space-y-3 px-3 py-3">
+          <div className="space-y-3 p-4">
             <div className="flex flex-wrap gap-2">
               <span
                 data-testid="pipeline-insight-total"
-                className="rounded-none bg-stone-100 px-2 py-1 text-[11px] font-medium text-stone-800"
+                className="rounded-lg border border-slate-200 bg-slate-100 px-2.5 py-1 text-xs font-bold text-slate-800"
               >
-                {insights.total} added
+                {insights.total} total
               </span>
-              <span className="rounded-none bg-sky-50 px-2 py-1 text-[11px] font-medium text-sky-800">
+              <span className="rounded-lg border border-sky-200 bg-sky-50 px-2.5 py-1 text-xs font-bold text-sky-800">
                 {insights.contacted} contacted
               </span>
-              <span className="rounded-none bg-violet-50 px-2 py-1 text-[11px] font-medium text-violet-800">
-                {insights.discoveryDone} discovery done
-              </span>
-              <span className="rounded-none bg-teal-50 px-2 py-1 text-[11px] font-medium text-teal-800">
-                {insights.demosScheduled + insights.demosDelivered} demos
-              </span>
-              <span className="rounded-none bg-amber-50 px-2 py-1 text-[11px] font-medium text-amber-800">
-                {insights.proposalsShared} proposals
-              </span>
-              <span className="rounded-none bg-emerald-50 px-2 py-1 text-[11px] font-medium text-emerald-800">
-                {insights.closedWon} won
-              </span>
-              <span className="rounded-none bg-rose-50 px-2 py-1 text-[11px] font-medium text-rose-800">
-                {insights.closedLost} lost
-              </span>
+              {insights.stageCounts.map((sc) => (
+                <span
+                  key={sc.stage}
+                  className="rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-xs font-semibold text-slate-700 shadow-2xs"
+                >
+                  <strong className="text-teal-700">{sc.count}</strong> {sc.stage}
+                </span>
+              ))}
             </div>
 
             <div>
@@ -836,14 +1000,14 @@ export function Pipeline({
 
             <div>
               <p className="mb-1.5 text-[10px] font-semibold tracking-wide text-stone-400 uppercase">
-                Contacts on these companies
+                Client contacts on these leads
               </p>
               <div className="flex flex-wrap gap-1.5">
                 <span className="rounded-none bg-stone-100 px-2 py-0.5 text-[11px] font-medium text-stone-700">
                   {insights.contactTotal} contacts
                 </span>
                 <span className="rounded-none bg-amber-100 px-2 py-0.5 text-[11px] font-medium text-amber-800">
-                  {insights.champions} champions
+                  {insights.champions} key contacts
                 </span>
                 <span
                   data-testid="pipeline-insight-whatsapp-pending"
@@ -867,17 +1031,17 @@ export function Pipeline({
 
       {filtered.length === 0 ? (
         <EmptyState
-          title={isNarrowedDown ? 'No companies match this view' : 'No companies yet'}
+          title={isNarrowedDown ? 'No leads match this view' : 'No leads yet'}
           message={
             isNarrowedDown
-              ? 'Try a different view or clear the filters to see more companies.'
-              : 'Add your first company to start building your pipeline.'
+              ? 'Try a different view or clear the filters to see more leads.'
+              : 'Add your first lead to start tracking client conversations.'
           }
-          ctaLabel={isNarrowedDown ? 'Show all companies' : '+ Add company'}
+          ctaLabel={isNarrowedDown ? 'Show all leads' : '+ Add Lead'}
           onCta={
             isNarrowedDown
               ? () => {
-                  setView('All Companies');
+                  setView('All Leads');
                   setFilters(DEFAULT_PIPELINE_FILTERS);
                 }
               : () => setCreating(true)
@@ -902,6 +1066,8 @@ export function Pipeline({
                 stages={stages}
                 today={today}
                 onOpen={openCompany}
+                onSubmitHandoff={(c) => setHandoffModalCompany(c)}
+                onViewDoc={openCompanyDoc}
               />
             ))}
           </div>
@@ -913,6 +1079,7 @@ export function Pipeline({
                   contacts={byCompany.get(activeCompany.id) ?? []}
                   stages={stages}
                   today={today}
+                  onSubmitHandoff={() => {}}
                 />
               </div>
             ) : null}
@@ -920,7 +1087,20 @@ export function Pipeline({
         </DndContext>
       ) : null}
 
-      <Modal open={creating} title="Add company" onClose={() => setCreating(false)} wide>
+      {handoffModalCompany ? (
+        <SubmitHandoffModal
+          company={handoffModalCompany}
+          open={Boolean(handoffModalCompany)}
+          onClose={() => setHandoffModalCompany(null)}
+          onSuccess={async () => {
+            await store.moveCompanyStage(handoffModalCompany.id, 'Handoff Submitted');
+            setPipelineSuccess(`Handoff submitted to Admin for "${handoffModalCompany.companyName}" with quotation document.`);
+            setHandoffModalCompany(null);
+          }}
+        />
+      ) : null}
+
+      <Modal open={creating} title="Add Lead" onClose={() => setCreating(false)} wide>
         <CompanyForm
           store={store}
           stages={stages}
@@ -931,7 +1111,7 @@ export function Pipeline({
 
       <Modal
         open={!!editing && !openContact}
-        title={editing?.companyName ?? 'Edit company'}
+        title={editing?.companyName ?? 'Edit lead'}
         onClose={closeEditing}
         wide
       >
@@ -942,7 +1122,7 @@ export function Pipeline({
             stages={stages}
             discoveryQuestions={discoveryQuestions}
             initial={editing}
-            onDone={closeEditing}
+            onDone={onCompanySaved}
             onOpenContact={(contact) => {
               setOpenContact(contact);
               logViewEvent('contact.opened', contact.id, contact.contactName);
@@ -968,6 +1148,12 @@ export function Pipeline({
           />
         ) : null}
       </Modal>
+
+      <DocumentViewerModal
+        document={viewingDoc}
+        open={Boolean(viewingDoc)}
+        onClose={() => setViewingDoc(null)}
+      />
     </div>
   );
 }

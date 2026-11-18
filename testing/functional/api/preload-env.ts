@@ -40,7 +40,7 @@ process.env.NODE_ENV = 'test';
 process.env.ALLOW_ACTIVITY_SEED ??= '1';
 process.env.JWT_SECRET ??= 'testing-jwt-secret-not-for-prod';
 process.env.DB_SSL ??= 'false';
-process.env.ALLOWED_EMAIL_DOMAIN ??= 'convobrains.com';
+process.env.ALLOWED_EMAIL_DOMAIN ??= 'skylance.local';
 process.env.DATABASE_URL ??=
   'postgresql://crm_test:crm_test_local_only@127.0.0.1:5434/brains_crm_test';
 process.env.DB_URL_DEV = process.env.DATABASE_URL;

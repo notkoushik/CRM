@@ -49,7 +49,7 @@ function ContactRow({
   onToggle: () => void;
 }) {
   return (
-    <div className="flex w-full items-stretch rounded-none border border-[var(--color-line)] bg-[var(--color-panel)] transition focus-within:ring-2 focus-within:ring-teal-600">
+    <div className="flex w-full items-stretch rounded-xl border border-slate-200 bg-white shadow-2xs transition hover:shadow-xs focus-within:ring-2 focus-within:ring-teal-600">
       <div className="flex items-center pl-4 pr-2">
         <input
           type="checkbox"
@@ -73,7 +73,7 @@ function ContactRow({
         {contact.champion ? (
           <span className="shrink-0 rounded-none bg-amber-100 px-2 py-0.5 text-[10px] font-bold text-amber-800">
             <span aria-hidden="true">★</span>
-            <span className="sr-only">Champion</span>
+            <span className="sr-only">Key Contact</span>
           </span>
         ) : null}
       </div>
@@ -161,6 +161,8 @@ export function Contacts({ store, contactStatuses, stages }: ContactsProps) {
   const [whatsappSaving, setWhatsappSaving] = useState<{ id: string; sent: boolean } | null>(
     null
   );
+  const [actionError, setActionError] = useState<string | null>(null);
+  const [actionSuccess, setActionSuccess] = useState<string | null>(null);
 
   useEffect(() => {
     const id = window.setTimeout(() => {
@@ -285,13 +287,16 @@ export function Contacts({ store, contactStatuses, stages }: ContactsProps) {
   const executeBulkUpdate = async () => {
     if (!bulkStatus) return;
     setBulkUpdating(true);
+    setActionError(null);
+    setActionSuccess(null);
     try {
       await store.bulkUpdateContactStatus(Array.from(selectedIds), bulkStatus);
+      setActionSuccess(`Updated ${selectedIds.size} contact${selectedIds.size === 1 ? '' : 's'} to ${bulkStatus}.`);
       setSelectedIds(new Set());
       setConfirmBulk(false);
       setBulkStatus('');
     } catch (e) {
-      alert(e instanceof Error ? e.message : 'Failed to bulk update');
+      setActionError(e instanceof Error ? e.message : 'Failed to bulk update');
     } finally {
       setBulkUpdating(false);
     }
@@ -299,11 +304,14 @@ export function Contacts({ store, contactStatuses, stages }: ContactsProps) {
 
   const markBulkWhatsApp = async () => {
     setBulkUpdating(true);
+    setActionError(null);
+    setActionSuccess(null);
     try {
       await store.bulkSetWhatsApp(Array.from(selectedIds), true);
+      setActionSuccess(`Marked WhatsApp sent for ${selectedIds.size} contact${selectedIds.size === 1 ? '' : 's'}.`);
       setSelectedIds(new Set());
     } catch (e) {
-      alert(e instanceof Error ? e.message : 'Failed to mark WhatsApp sent');
+      setActionError(e instanceof Error ? e.message : 'Failed to mark WhatsApp sent');
     } finally {
       setBulkUpdating(false);
     }
@@ -311,10 +319,11 @@ export function Contacts({ store, contactStatuses, stages }: ContactsProps) {
 
   const toggleWhatsApp = async (contact: Contact, sent: boolean) => {
     setWhatsappSaving({ id: contact.id, sent });
+    setActionError(null);
     try {
       await store.updateContact(contact.id, { whatsappSent: sent });
     } catch (e) {
-      alert(e instanceof Error ? e.message : 'Failed to update WhatsApp status');
+      setActionError(e instanceof Error ? e.message : 'Failed to update WhatsApp status');
     } finally {
       setWhatsappSaving(null);
     }
@@ -347,12 +356,25 @@ export function Contacts({ store, contactStatuses, stages }: ContactsProps) {
         </button>
       </header>
 
+      {actionError ? (
+        <div role="alert" className="flex items-center justify-between rounded bg-rose-50 p-3 text-sm text-rose-700">
+          <span>{actionError}</span>
+          <button type="button" onClick={() => setActionError(null)} className="ml-2 font-bold text-rose-800">✕</button>
+        </div>
+      ) : null}
+      {actionSuccess ? (
+        <div role="status" className="flex items-center justify-between rounded bg-teal-50 p-3 text-sm text-teal-800">
+          <span>{actionSuccess}</span>
+          <button type="button" onClick={() => setActionSuccess(null)} className="ml-2 font-bold text-teal-900">✕</button>
+        </div>
+      ) : null}
+
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
         <SearchInput
           data-testid="contact-search"
           value={searchDraft}
           onChange={setSearchDraft}
-          placeholder="Search contacts, companies, emails…"
+          placeholder="Search contacts, client businesses, emails…"
         />
         <FilterDropdown
           data-testid="contact-date-range"
@@ -404,9 +426,9 @@ export function Contacts({ store, contactStatuses, stages }: ContactsProps) {
         ) : null}
         <FilterDropdown
           data-testid="contact-filter-company"
-          label="Company"
+          label="Client business"
           value={filters.companyId ?? ''}
-          options={[{ value: '', label: 'All companies' }, ...companyOptions]}
+          options={[{ value: '', label: 'All client businesses' }, ...companyOptions]}
           searchable
           active={!!filters.companyId}
           onChange={(v) => patchFilters({ companyId: !v || v === '' ? null : (v as string) })}
@@ -438,7 +460,7 @@ export function Contacts({ store, contactStatuses, stages }: ContactsProps) {
               : 'bg-white text-stone-600 ring-1 ring-[var(--color-line)] hover:bg-stone-50'
           }`}
         >
-          Champion only
+          Key contact only
         </button>
       </div>
 
@@ -468,7 +490,7 @@ export function Contacts({ store, contactStatuses, stages }: ContactsProps) {
           ))}
           {companyLabel ? (
             <FilterChip
-              label={`Company: ${companyLabel}`}
+                  label={`Client business: ${companyLabel}`}
               onClear={() => patchFilters({ companyId: null })}
             />
           ) : null}
@@ -489,7 +511,7 @@ export function Contacts({ store, contactStatuses, stages }: ContactsProps) {
           ) : null}
           {filters.championOnly ? (
             <FilterChip
-              label="Champion only"
+              label="Key contact only"
               onClear={() => patchFilters({ championOnly: false })}
             />
           ) : null}
@@ -677,7 +699,7 @@ export function Contacts({ store, contactStatuses, stages }: ContactsProps) {
             {insights.companyStageCounts.length > 0 ? (
               <div>
                 <p className="mb-1.5 text-[10px] font-semibold tracking-wide text-stone-400 uppercase">
-                  Company stages ({insights.uniqueCompanies} companies)
+                  Lead stages ({insights.uniqueCompanies} leads)
                 </p>
                 <div className="flex flex-wrap gap-1.5">
                   {insights.companyStageCounts.map(({ stage, count }) => (
@@ -729,11 +751,11 @@ export function Contacts({ store, contactStatuses, stages }: ContactsProps) {
         ) : null}
       </div>
 
-      <div className="hidden overflow-hidden rounded-none border border-[var(--color-line)] bg-[var(--color-panel)] md:block">
+      <div className="hidden overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-xs md:block">
         <div className="overflow-x-auto">
           <table className="w-full min-w-[1160px] text-left text-sm">
             <thead>
-              <tr className="border-b border-[var(--color-line)] bg-stone-50/80 text-[11px] tracking-wide text-stone-500">
+              <tr className="border-b border-slate-200 bg-slate-50 text-[11px] font-bold tracking-wider text-slate-500 uppercase">
                 <th className="px-4 py-3 font-semibold">
                   <input
                     type="checkbox"
@@ -750,7 +772,7 @@ export function Contacts({ store, contactStatuses, stages }: ContactsProps) {
                   onSort={onSort}
                 />
                 <SortHeader
-                  label="Company"
+                  label="Client business"
                   sortKey="companyName"
                   activeKey={sortKey}
                   direction={sortDir}
@@ -828,7 +850,7 @@ export function Contacts({ store, contactStatuses, stages }: ContactsProps) {
                         <span className="font-semibold text-stone-900">{t.contactName}</span>
                         {t.champion ? (
                           <span className="rounded-none bg-amber-100 px-1.5 py-0.5 text-[10px] font-bold text-amber-800">
-                            ★ Champion
+                            ★ Key Contact
                           </span>
                         ) : null}
                       </div>

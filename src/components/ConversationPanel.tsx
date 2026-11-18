@@ -9,7 +9,6 @@ import {
   uploadConversationRecording,
 } from '../lib/conversations';
 import { Field, inputClass, btnGhost, btnPrimary } from './ui';
-import { ConvobrainsBridge } from './ConvobrainsBridge';
 
 interface ConversationPanelProps {
   store: CrmStore;
@@ -112,12 +111,13 @@ export function ConversationPanel({
   };
 
   return (
-    <div className="space-y-4 rounded-none border border-[var(--color-line)] bg-stone-50/50 p-4">
-      <div>
-        <h3 className="text-sm font-semibold text-stone-800">Call recordings</h3>
-        <p className="mt-1 text-xs text-stone-500">
-          Set the company stage for this call before uploading. Time is saved automatically when the
-          file reaches storage.
+    <div className="space-y-4 rounded-xl border border-slate-200 bg-slate-50/50 p-4">
+      <div className="border-b border-slate-200/80 pb-2.5">
+        <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+          <span>🎵</span> Call Audio Recordings
+        </h3>
+        <p className="mt-0.5 text-xs text-slate-500">
+          Upload phone call audio clips (mp3, m4a, wav). Stage at call is tagged automatically.
         </p>
       </div>
 
@@ -159,49 +159,52 @@ export function ConversationPanel({
         disabled={uploading || !file}
         onClick={() => void upload()}
       >
-        {uploading ? 'Uploading…' : 'Upload recording'}
+        {uploading ? 'Uploading…' : 'Upload Audio Recording'}
       </button>
 
       {error ? (
-        <p className="rounded-none bg-rose-50 px-3 py-2 text-xs text-rose-700">{error}</p>
+        <p className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-700">{error}</p>
       ) : null}
 
       {playUrl ? (
-        <audio controls className="w-full" src={playUrl} autoPlay>
-          <track kind="captions" />
-        </audio>
+        <div className="rounded-xl border border-teal-200 bg-teal-50/60 p-3 shadow-2xs">
+          <p className="text-xs font-bold text-teal-800 mb-1.5">Audio Player</p>
+          <audio controls className="w-full" src={playUrl} autoPlay>
+            <track kind="captions" />
+          </audio>
+        </div>
       ) : null}
 
       <div>
-        <p className="mb-2 text-xs font-semibold tracking-wide text-stone-500 uppercase">
-          History ({items.length})
+        <p className="mb-2 text-xs font-bold uppercase tracking-wider text-slate-500">
+          Recording Archives ({items.length})
         </p>
         {loading ? (
-          <p className="text-xs text-stone-400">Loading…</p>
+          <p className="text-xs text-slate-400">Loading…</p>
         ) : items.length === 0 ? (
-          <p className="text-xs text-stone-400">No recordings yet.</p>
+          <p className="rounded-lg border border-dashed border-slate-200 bg-white p-3 text-xs text-slate-400">No recordings uploaded yet.</p>
         ) : (
-          <ul className="divide-y divide-[var(--color-line)] rounded-none border border-[var(--color-line)] bg-white">
+          <ul className="divide-y divide-slate-100 rounded-xl border border-slate-200 bg-white overflow-hidden shadow-2xs">
             {items.map((c) => (
               <li
                 key={c.id}
-                className="flex flex-wrap items-center justify-between gap-2 px-3 py-2.5"
+                className="flex flex-wrap items-center justify-between gap-2 px-3 py-2.5 hover:bg-slate-50/60 transition"
               >
                 <div className="min-w-0 text-xs">
-                  <p className="font-medium text-stone-800">{formatCalledAt(c.calledAt)}</p>
-                  <p className="text-stone-500">
-                    {c.calledByName} · stage: {c.stageAtCall}
+                  <p className="font-bold text-slate-900">{formatCalledAt(c.calledAt)}</p>
+                  <p className="text-slate-500 text-[11px]">
+                    Recorded by <span className="font-semibold text-slate-700">{c.calledByName}</span> · stage: <span className="font-semibold text-teal-800">{c.stageAtCall}</span>
                   </p>
-                  {c.notes ? <p className="mt-0.5 text-stone-400">{c.notes}</p> : null}
+                  {c.notes ? <p className="mt-0.5 text-slate-600 bg-slate-50 px-1.5 py-0.5 rounded text-[11px] inline-block">{c.notes}</p> : null}
                 </div>
-                <div className="flex shrink-0 gap-2">
-                  <button type="button" className={btnGhost} onClick={() => void play(c.id)}>
-                    Play
+                <div className="flex shrink-0 gap-2 items-center">
+                  <button type="button" className={`${btnGhost} py-1 text-xs`} onClick={() => void play(c.id)}>
+                    ▶ Play
                   </button>
                   {store.canDelete ? (
                     <button
                       type="button"
-                      className="text-xs text-rose-600 hover:underline"
+                      className="text-xs font-medium text-rose-600 hover:underline cursor-pointer"
                       onClick={() => void remove(c.id)}
                     >
                       Delete
@@ -214,7 +217,6 @@ export function ConversationPanel({
         )}
       </div>
 
-      <ConvobrainsBridge variant="panel" />
     </div>
   );
 }

@@ -17,7 +17,7 @@ describe('contact call log', () => {
         contactStatus: 'Not Contacted',
         champion: false,
       },
-      session: founder,
+      session: sdr,
     });
     expect(created.status).toBe(201);
     const id = created.data.id;
@@ -69,5 +69,97 @@ describe('contact call log', () => {
       session,
     });
     expect(res.status).toBe(404);
+  });
+
+  it('runs the interactive Exotel POC telephony workflow end-to-end', async () => {
+    const founder = await loginAsCookie(SEED.founder);
+    const sdr = await loginAsCookie(SEED.sdr);
+
+    // 1. Status check
+    const statusRes = await api<{ configured: boolean; mode: string; provider: string }>(
+      '/api/exotel/status',
+      { method: 'GET', session: sdr }
+    );
+    expect(statusRes.status).toBe(200);
+    expect(statusRes.data.configured).toBe(true);
+    expect(statusRes.data.provider).toBe('Exotel');
+
+    // 2. Create lead and contact
+    const u = uniq();
+    const compRes = await api<{ id: string }>('/api/companies', {
+      body: { companyName: `Tel Co ${u}`, stage: 'Lead Added' },
+      session: founder,
+    });
+    expect(compRes.status).toBe(201);
+    const companyId = compRes.data.id;
+
+    const contactRes = await api<{ id: string }>('/api/contacts', {
+      body: {
+        companyId,
+        contactName: `Telephony Lead ${u}`,
+        phone: '+919876543210',
+        contactStatus: 'Not Contacted',
+        champion: true,
+      },
+      session: founder,
+    });
+    expect(contactRes.status).toBe(201);
+    const contactId = contactRes.data.id;
+
+    // 3. Start Exotel call in POC mode
+    const callRes = await api<{
+      callLog: {
+        id: string;
+        providerCallSid: string;
+        providerStatus: string;
+        contactName: string;
+      };
+    }>('/api/exotel/calls', {
+      method: 'POST',
+      body: { contactId },
+      session: founder,
+    });
+    expect(callRes.status).toBe(201);
+    expect(callRes.data.callLog.id).toBeTruthy();
+    expect(callRes.data.callLog.providerCallSid).toMatch(/^poc_exo_/);
+    const callLogId = callRes.data.callLog.id;
+
+    // 4. Complete active call with disposition & notes
+    const completeRes = await api<{ ok: boolean; callLogId: string }>(
+      `/api/exotel/calls/${callLogId}/complete`,
+      {
+        method: 'POST',
+        body: {
+          durationSeconds: 42,
+          outcome: 'Interested',
+          notes: 'Client confirmed budget and requested quotation document.',
+          nextFollowUpAt: '2026-11-25',
+        },
+        session: founder,
+      }
+    );
+    expect(completeRes.status).toBe(200);
+    expect(completeRes.data.ok).toBe(true);
+
+    // 5. Verify recording stream
+    const recRes = await api(`/api/exotel/call-logs/${callLogId}/recording`, {
+      method: 'GET',
+      session: founder,
+    });
+    expect(recRes.status).toBe(200);
+
+    // 6. Verify structured call log output
+    const listRes = await api<{ callLogs: Array<{ id: string; outcome: string; hasRecording: boolean }> }>(
+      `/api/call-logs?contactId=${contactId}`,
+      { method: 'GET', session: founder }
+    );
+    expect(listRes.status).toBe(200);
+    const saved = listRes.data.callLogs.find((c) => c.id === callLogId);
+    expect(saved).toBeTruthy();
+    expect(saved?.outcome).toBe('Interested');
+    expect(saved?.hasRecording).toBe(true);
+
+    // Cleanup
+    await api(`/api/companies/${companyId}`, { method: 'DELETE', session: founder });
   });
 });

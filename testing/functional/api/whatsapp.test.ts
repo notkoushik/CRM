@@ -26,7 +26,7 @@ describe('contact WhatsApp flag', () => {
   it('sets, keeps the first time on re-set, clears, and logs each change', async () => {
     const founder = await loginAsCookie(SEED.founder);
     const sdr = await loginAsCookie(SEED.sdr);
-    const id = await createContact(founder, 'Patch');
+    const id = await createContact(sdr, 'Patch');
 
     const sent = await api<ContactRow>(`/api/contacts/${id}`, {
       method: 'PATCH',

@@ -42,7 +42,7 @@ function formatResult(result: {
   contactsCreated: number;
   contactsSkipped: number;
 }) {
-  return `Done. ${result.companiesCreated} new companies, ${result.companiesUpdated} existing companies updated, ${result.contactsCreated} contacts added, ${result.contactsSkipped} duplicates skipped.`;
+  return `Done. ${result.companiesCreated} new leads, ${result.companiesUpdated} existing leads updated, ${result.contactsCreated} contacts added, ${result.contactsSkipped} duplicates skipped.`;
 }
 
 export function ImportLeads({ store }: ImportLeadsProps) {
@@ -198,45 +198,46 @@ export function ImportLeads({ store }: ImportLeadsProps) {
         <p className="mt-2 text-sm text-stone-500">
           Add one lead or import many. Columns:{' '}
           <span className="font-medium text-stone-700">
-            Company, Prospect Name, Job Title, Email, Phone, Location, Employees, Industry
+            Client Business, Prospect Name, Job Title, Email, Phone, Location, Employees, Industry
           </span>
-          . Existing companies are matched by name; duplicate emails are skipped.
+          . Existing leads are matched by client business name; duplicate emails are skipped.
         </p>
       </header>
 
-      <div className="flex gap-1 rounded-none border border-[var(--color-line)] bg-stone-50 p-1">
+      <div className="flex gap-1.5 rounded-xl border border-slate-200 bg-slate-100/80 p-1.5 shadow-2xs">
         <button
           type="button"
-          className={`flex-1 rounded-none px-3 py-2 text-sm font-medium transition ${
-            mode === 'single' ? 'bg-white text-stone-900' : 'text-stone-500 hover:text-stone-800'
+          className={`flex-1 rounded-lg px-4 py-2 text-xs font-bold transition cursor-pointer ${
+            mode === 'single' ? 'bg-white text-slate-900 shadow-xs' : 'text-slate-600 hover:text-slate-900'
           }`}
           onClick={() => setMode('single')}
         >
-          Single lead
+          Single Lead Entry
         </button>
         <button
           type="button"
-          className={`flex-1 rounded-none px-3 py-2 text-sm font-medium transition ${
-            mode === 'bulk' ? 'bg-white text-stone-900' : 'text-stone-500 hover:text-stone-800'
+          className={`flex-1 rounded-lg px-4 py-2 text-xs font-bold transition cursor-pointer ${
+            mode === 'bulk' ? 'bg-white text-slate-900 shadow-xs' : 'text-slate-600 hover:text-slate-900'
           }`}
           onClick={() => setMode('bulk')}
         >
-          Bulk import
+          Bulk Import (CSV / Excel)
         </button>
       </div>
 
       {mode === 'single' ? (
         <form
           onSubmit={runSingleImport}
-          className="space-y-4 rounded-none border border-[var(--color-line)] bg-[var(--color-panel)] p-5"
+          className="space-y-4 rounded-2xl border border-slate-200 bg-white p-6 shadow-xs"
         >
           <div className="grid gap-4 sm:grid-cols-2">
-            <Field label="Company *" className="sm:col-span-2">
+            <Field label="Client Business *" className="sm:col-span-2">
               <input
                 className={inputClass}
                 value={single.company}
                 onChange={(e) => setSingle((s) => ({ ...s, company: e.target.value }))}
                 required
+                placeholder="Business or organization name"
               />
             </Field>
             <Field label="Prospect name *">
@@ -245,6 +246,7 @@ export function ImportLeads({ store }: ImportLeadsProps) {
                 value={single.prospectName}
                 onChange={(e) => setSingle((s) => ({ ...s, prospectName: e.target.value }))}
                 required
+                placeholder="Full name"
               />
             </Field>
             <Field label="Job title">
@@ -252,6 +254,7 @@ export function ImportLeads({ store }: ImportLeadsProps) {
                 className={inputClass}
                 value={single.jobTitle}
                 onChange={(e) => setSingle((s) => ({ ...s, jobTitle: e.target.value }))}
+                placeholder="e.g. Managing Director"
               />
             </Field>
             <Field label="Email">
@@ -260,6 +263,7 @@ export function ImportLeads({ store }: ImportLeadsProps) {
                 className={inputClass}
                 value={single.email}
                 onChange={(e) => setSingle((s) => ({ ...s, email: e.target.value }))}
+                placeholder="email@example.com"
               />
             </Field>
             <Field label="Phone">
@@ -267,6 +271,7 @@ export function ImportLeads({ store }: ImportLeadsProps) {
                 className={inputClass}
                 value={single.phone}
                 onChange={(e) => setSingle((s) => ({ ...s, phone: e.target.value }))}
+                placeholder="+91 …"
               />
             </Field>
             <Field label="Location">
@@ -274,6 +279,7 @@ export function ImportLeads({ store }: ImportLeadsProps) {
                 className={inputClass}
                 value={single.location}
                 onChange={(e) => setSingle((s) => ({ ...s, location: e.target.value }))}
+                placeholder="City / Country"
               />
             </Field>
             <Field label="Employees">
@@ -282,6 +288,7 @@ export function ImportLeads({ store }: ImportLeadsProps) {
                 inputMode="numeric"
                 value={single.employees}
                 onChange={(e) => setSingle((s) => ({ ...s, employees: e.target.value }))}
+                placeholder="e.g. 25"
               />
             </Field>
             <Field label="Industry" className="sm:col-span-2">
@@ -289,17 +296,17 @@ export function ImportLeads({ store }: ImportLeadsProps) {
                 className={inputClass}
                 value={single.industry}
                 onChange={(e) => setSingle((s) => ({ ...s, industry: e.target.value }))}
-                placeholder="Healthcare, SaaS, …"
+                placeholder="Healthcare, Real Estate, E-commerce…"
               />
             </Field>
           </div>
           <button type="submit" className={btnPrimary} disabled={busy}>
-            {busy ? 'Saving…' : 'Add lead'}
+            {busy ? 'Saving…' : 'Add Lead'}
           </button>
           {lastResult && mode === 'single' ? (
             <p
               role="alert"
-              className={`rounded-none px-3 py-2 text-sm ${resultBannerClass(lastResult.ok)}`}
+              className={`rounded-lg border px-3.5 py-2.5 text-xs font-semibold ${resultBannerClass(lastResult.ok)}`}
             >
               {lastResult.message}
             </p>
@@ -307,10 +314,10 @@ export function ImportLeads({ store }: ImportLeadsProps) {
         </form>
       ) : (
         <>
-          <div className="rounded-none border border-[var(--color-line)] bg-[var(--color-panel)] p-5">
+          <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-xs">
             <div className="flex flex-wrap items-center gap-2">
               <label className={`${btnGhost} cursor-pointer`}>
-                Upload CSV / Excel
+                📁 Upload CSV / Excel
                 <input
                   type="file"
                   accept=".csv,.xlsx,.xls,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel"
@@ -319,20 +326,20 @@ export function ImportLeads({ store }: ImportLeadsProps) {
                 />
               </label>
               <button type="button" className={btnGhost} onClick={downloadTemplate}>
-                Download template
+                📥 Download Template
               </button>
               {fileName ? (
-                <span className="text-xs text-stone-500">
+                <span className="text-xs font-semibold text-teal-800 bg-teal-50 px-2.5 py-1 rounded-md border border-teal-200">
                   Loaded: {fileName} ({fileRows.length} rows)
                 </span>
               ) : null}
             </div>
 
-            <label className="mt-4 block text-sm font-medium text-stone-600">
-              Or paste table here
+            <label className="mt-4 block text-xs font-bold uppercase tracking-wider text-slate-500">
+              Or paste tabular rows directly
             </label>
             <textarea
-              className={`${inputClass} mt-2 min-h-[220px] font-mono text-xs leading-relaxed`}
+              className={`${inputClass} mt-2 min-h-[200px] font-mono text-xs leading-relaxed`}
               value={text}
               onChange={(e) => {
                 setText(e.target.value);
@@ -345,7 +352,7 @@ export function ImportLeads({ store }: ImportLeadsProps) {
               spellCheck={false}
             />
 
-            <div className="mt-3 flex flex-wrap items-center gap-2">
+            <div className="mt-4 flex flex-wrap items-center gap-2">
               <button
                 type="button"
                 className={btnPrimary}
@@ -380,12 +387,12 @@ export function ImportLeads({ store }: ImportLeadsProps) {
                   setLastResult(null);
                 }}
               >
-                Load example format
+                Load Example Template
               </button>
             </div>
 
             {bulkErrors.length > 0 ? (
-              <ul className="mt-3 space-y-1 rounded-none bg-amber-50 px-3 py-2 text-xs text-amber-800">
+              <ul className="mt-3 space-y-1 rounded-xl bg-amber-50 border border-amber-200 px-3.5 py-2.5 text-xs text-amber-800">
                 {bulkErrors.slice(0, 8).map((err) => (
                   <li key={err}>{err}</li>
                 ))}
@@ -396,7 +403,7 @@ export function ImportLeads({ store }: ImportLeadsProps) {
             {lastResult && mode === 'bulk' ? (
               <p
                 role="alert"
-                className={`mt-3 rounded-none px-3 py-2 text-sm ${resultBannerClass(lastResult.ok)}`}
+                className={`mt-3 rounded-lg border px-3.5 py-2.5 text-xs font-semibold ${resultBannerClass(lastResult.ok)}`}
               >
                 {lastResult.message}
               </p>
@@ -404,13 +411,13 @@ export function ImportLeads({ store }: ImportLeadsProps) {
           </div>
 
           {byCompany.length > 0 ? (
-            <div className="rounded-none border border-[var(--color-line)] bg-[var(--color-panel)] p-5">
-              <h2 className="text-sm font-semibold text-stone-800">Preview by company</h2>
-              <ul className="mt-3 divide-y divide-[var(--color-line)]">
+            <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-xs">
+              <h2 className="text-sm font-bold text-slate-900 border-b border-slate-100 pb-2.5">Preview by Client Business</h2>
+              <ul className="mt-3 divide-y divide-slate-100">
                 {byCompany.map((c) => (
-                  <li key={c.company} className="flex items-center justify-between py-2 text-sm">
-                    <span className="font-medium text-stone-800">{c.company}</span>
-                    <span className="text-stone-500">{c.count} contacts</span>
+                  <li key={c.company} className="flex items-center justify-between py-2 text-xs">
+                    <span className="font-bold text-slate-800">{c.company}</span>
+                    <span className="rounded-md bg-slate-100 px-2 py-0.5 text-slate-600 font-semibold">{c.count} contacts</span>
                   </li>
                 ))}
               </ul>

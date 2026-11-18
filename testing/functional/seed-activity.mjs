@@ -9,9 +9,9 @@ const pool = new pg.Pool({ connectionString: info.connectionString, ssl: false }
 
 const DAYS = 3;
 const SDR_EMAILS = [
-  'rahul.seed@convobrains.com',
-  'neha.seed@convobrains.com',
-  'aman.seed@convobrains.com',
+  'rahul.seed@skylance.local',
+  'neha.seed@skylance.local',
+  'aman.seed@skylance.local',
 ];
 
 const CALL_OUTCOMES = [

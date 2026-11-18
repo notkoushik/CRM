@@ -54,6 +54,11 @@ export interface Company {
   /** questionId → answer string */
   discoveryAnswers: Record<string, string>;
   createdAt: string;
+  hasDocument?: boolean;
+  hasQuotation?: boolean;
+  primaryDocumentId?: string | null;
+  primaryDocumentName?: string | null;
+  primaryDocumentType?: string | null;
 }
 
 export interface Contact {
@@ -79,21 +84,35 @@ export interface Contact {
 }
 
 export type Page =
-  'dashboard' | 'pipeline' | 'contacts' | 'import' | 'users' | 'activity' | 'settings';
+  | 'dashboard'
+  | 'calls'
+  | 'pipeline'
+  | 'contacts'
+  | 'import'
+  | 'users'
+  | 'activity'
+  | 'settings'
+  | 'handoffs'
+  | 'projects';
 
 export type PipelineView =
+  | 'All Leads'
   | 'All Companies'
   | 'New Leads'
-  | 'Discovery Calls'
+  | 'Contacted'
   | 'Follow-ups'
+  | 'Qualified'
+  | 'Handoff Submitted'
+  | 'Converted'
+  | 'Not Interested'
+  | 'Discovery Calls'
   | 'Demo Scheduled'
   | 'Demo Delivered'
   | 'Commercial Proposal Shared'
   | 'POC Running'
   | 'Final Negotiation'
   | 'Closed Won'
-  | 'Closed Lost'
-  | 'Not Interested';
+  | 'Closed Lost';
 
 /** Smart date-logic queue for the Contacts page — replaces the old "Today" tab group. */
 export type ContactQueue =
@@ -189,7 +208,7 @@ export interface AuthUser {
   role?: string;
 }
 
-export const USER_ROLES = ['founder', 'sdr', 'admin'] as const;
+export const USER_ROLES = ['founder', 'sdr', 'developer', 'admin'] as const;
 export type UserRole = (typeof USER_ROLES)[number];
 
 export interface CrmUser {
@@ -206,6 +225,13 @@ export function canDeleteRecords(role?: string): boolean {
 
 export function canManageUsers(role?: string): boolean {
   return role === 'admin' || role === 'founder';
+}
+
+export function displayRole(role?: string): string {
+  if (role === 'sdr') return 'Caller';
+  if (role === 'founder' || role === 'admin') return 'Admin';
+  if (role === 'developer') return 'Developer';
+  return role ?? 'Unknown';
 }
 
 export interface Conversation {

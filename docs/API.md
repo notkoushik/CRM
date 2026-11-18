@@ -103,6 +103,20 @@ Requires AWS env vars. See `.env.example`.
 | `GET`    | `/api/conversations/:id/play`     | Presigned play URL                     |
 | `DELETE` | `/api/conversations/:id`          | Delete (admin)                         |
 
+## Exotel calling
+
+Requires the Exotel server environment variables documented in `.env.example`. Exotel credentials stay on the server. Caller accounts may call only contacts on their assigned leads; Admin accounts may call any contact.
+
+| Method | Path | Description |
+| --- | --- | --- |
+| `GET` | `/api/exotel/status` | Whether server-side Exotel configuration is complete (no secrets returned) |
+| `POST` | `/api/exotel/calls` | Start a recorded outbound call `{ contactId }` through the shared agent mobile |
+| `GET` | `/api/exotel/call-logs/:id/recording` | Authorized recording playback proxy |
+| `PATCH` | `/api/call-logs/:id` | Update notes on a call the user can access |
+| `POST` | `/api/webhooks/exotel/:token` | Exotel status/recording callback; token is configured server-side |
+
+The outbound call uses the logged-in CRM user for attribution, dials the configured shared mobile first, then the contact. Exotel terminal callbacks update status and duration and attach the recording URL. Inbound Exotel routing/import is not implemented by these endpoints and requires a separate Exotel call-flow setup.
+
 ## Activity (admin / founder)
 
 | Method  | Path                                 | Description                                        |

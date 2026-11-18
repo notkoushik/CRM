@@ -19,7 +19,7 @@ function verifyCsrfToken(
 }
 
 /** Must match users.role CHECK in sql/schema.sql */
-export const USER_ROLES = ['founder', 'sdr', 'admin'] as const;
+export const USER_ROLES = ['founder', 'sdr', 'developer', 'admin'] as const;
 export type UserRole = (typeof USER_ROLES)[number];
 
 export function isUserRole(value: string): value is UserRole {
@@ -28,6 +28,32 @@ export function isUserRole(value: string): value is UserRole {
 
 export function isAdminRole(role?: string): boolean {
   return role === 'admin' || role === 'founder';
+}
+
+/** Existing `sdr` accounts are presented as Callers in Skylance. */
+export function isCallerRole(role?: string): boolean {
+  return role === 'sdr';
+}
+
+/** Developers receive project access only; lead routes must not treat them as callers. */
+export function isDeveloperRole(role?: string): boolean {
+  return role === 'developer';
+}
+
+export function canAccessAssignedLead(
+  role: string | undefined,
+  userId: string | undefined,
+  assignedTo: string | null | undefined
+): boolean {
+  if (isAdminRole(role)) return true;
+  return isCallerRole(role) && Boolean(userId && assignedTo && userId === assignedTo);
+}
+
+export function displayRole(role?: string): string {
+  if (role === 'sdr') return 'Caller';
+  if (role === 'founder' || role === 'admin') return 'Admin';
+  if (role === 'developer') return 'Developer';
+  return role ?? 'Unknown';
 }
 
 export { allowedEmailError, isAllowedEmail };
@@ -70,6 +96,14 @@ export function requireAdmin(req: Request, res: Response, next: NextFunction) {
     return;
   }
   next();
+}
+
+export function requireCallerOrAdmin(req: Request, res: Response, next: NextFunction) {
+  if (isAdminRole(req.user?.role) || isCallerRole(req.user?.role)) {
+    next();
+    return;
+  }
+  res.status(403).json({ error: 'Caller access required.' });
 }
 
 export function requireCsrf(

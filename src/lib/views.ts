@@ -21,17 +21,13 @@ import {
 const POC_STAGES: Stage[] = ['POC Kickoff', 'Client Data Received', 'POC Delivered'];
 
 export const PIPELINE_VIEWS: PipelineView[] = [
-  'All Companies',
+  'All Leads',
   'New Leads',
-  'Discovery Calls',
+  'Contacted',
   'Follow-ups',
-  'Demo Scheduled',
-  'Demo Delivered',
-  'Commercial Proposal Shared',
-  'POC Running',
-  'Final Negotiation',
-  'Closed Won',
-  'Closed Lost',
+  'Qualified',
+  'Handoff Submitted',
+  'Converted',
   'Not Interested',
 ];
 
@@ -72,14 +68,21 @@ function isActiveContact(contact: Contact): boolean {
 
 export function filterCompanies(companies: Company[], view: PipelineView): Company[] {
   switch (view) {
+    case 'All Leads':
     case 'All Companies':
       return companies;
     case 'New Leads':
-      return companies.filter((c) => c.stage === 'Lead Added');
+      return companies.filter((c) => c.stage === 'New Lead' || c.stage === 'Lead Added');
+    case 'Contacted':
+      return companies.filter((c) => c.stage === 'Contacted');
     case 'Discovery Calls':
       return companies.filter((c) => c.stage === 'Discovery Call Done');
     case 'Follow-ups':
       return companies.filter((c) => c.stage === 'Follow-up');
+    case 'Qualified':
+      return companies.filter((c) => c.stage === 'Qualified');
+    case 'Handoff Submitted':
+      return companies.filter((c) => c.stage === 'Handoff Submitted');
     case 'Demo Scheduled':
       return companies.filter((c) => c.stage === 'Demo Scheduled');
     case 'Demo Delivered':
@@ -90,8 +93,9 @@ export function filterCompanies(companies: Company[], view: PipelineView): Compa
       return companies.filter((c) => POC_STAGES.includes(c.stage));
     case 'Final Negotiation':
       return companies.filter((c) => c.stage === 'Final Negotiation');
+    case 'Converted':
     case 'Closed Won':
-      return companies.filter((c) => c.stage === 'Closed Won');
+      return companies.filter((c) => c.stage === 'Converted' || c.stage === 'Closed Won');
     case 'Closed Lost':
       return companies.filter((c) => c.stage === 'Closed Lost');
     case 'Not Interested':
@@ -625,12 +629,14 @@ export function statusColor(status: ContactStatus): string {
 }
 
 export function stageAccent(stage: Stage): string {
-  if (stage === 'Closed Won') return 'border-t-emerald-500';
-  if (stage === 'Closed Lost' || stage === 'Not Interested') return 'border-t-stone-400';
-  if (stage.includes('Demo') || stage.includes('POC')) return 'border-t-teal-500';
-  if (stage === 'Lead Added') return 'border-t-sky-400';
-  if (stage === 'Follow-up') return 'border-t-amber-500';
-  return 'border-t-teal-600';
+  if (stage === 'Converted' || stage === 'Closed Won') return 'border-t-4 border-t-emerald-500';
+  if (stage === 'Not Interested' || stage === 'Closed Lost') return 'border-t-4 border-t-slate-400';
+  if (stage === 'New Lead' || stage === 'Lead Added') return 'border-t-4 border-t-sky-500';
+  if (stage === 'Contacted') return 'border-t-4 border-t-blue-500';
+  if (stage === 'Follow-up') return 'border-t-4 border-t-amber-500';
+  if (stage === 'Qualified') return 'border-t-4 border-t-teal-500';
+  if (stage === 'Handoff Submitted') return 'border-t-4 border-t-purple-500';
+  return 'border-t-4 border-t-teal-600';
 }
 
 const CONTACT_FILTERS_KEY = 'zcc.contactFilters';
@@ -674,6 +680,19 @@ export interface SavedPipelineState {
   filters: PipelineFilters;
 }
 
+const VALID_STORED_VIEWS = new Set<string>([
+  ...PIPELINE_VIEWS,
+  'All Companies',
+  'Closed Won',
+  'Closed Lost',
+  'POC Running',
+  'Demo Scheduled',
+  'Demo Delivered',
+  'Commercial Proposal Shared',
+  'Discovery Calls',
+  'Final Negotiation',
+]);
+
 /** Sales Pipeline view + filters survive switching pages within a browser tab. */
 export function loadPipelineState(storage: Pick<Storage, 'getItem'> | null): SavedPipelineState {
   const fallback: SavedPipelineState = {
@@ -685,7 +704,7 @@ export function loadPipelineState(storage: Pick<Storage, 'getItem'> | null): Sav
     if (!raw) return fallback;
     const saved = JSON.parse(raw) as Partial<SavedPipelineState>;
     if (!saved || typeof saved !== 'object') return fallback;
-    const view = PIPELINE_VIEWS.includes(saved.view as PipelineView)
+    const view = saved.view && VALID_STORED_VIEWS.has(saved.view)
       ? (saved.view as PipelineView)
       : fallback.view;
     return { view, filters: { ...DEFAULT_PIPELINE_FILTERS, ...(saved.filters ?? {}) } };

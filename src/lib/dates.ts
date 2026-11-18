@@ -1,5 +1,5 @@
 /**
- * Date and relative time formatting helpers for Zero Cost CRM.
+ * Date and relative time formatting helpers for Skylance CRM.
  * Pure TypeScript functions with zero external dependencies.
  */
 

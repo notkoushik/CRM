@@ -14,13 +14,18 @@ import {
   isUserRole,
   requireAuth,
   requireAdmin,
+  requireCallerOrAdmin,
   requireCsrf,
   signToken,
   USER_ROLES,
 } from './auth.js';
+import { canAccessCompany, canAccessContact, companyScope } from './access.js';
 import { mapCompany, mapContact } from './mappers.js';
 import { registerConversationRoutes } from './conversations.js';
 import { registerActivityRoutes } from './activityRoutes.js';
+import { registerProjectRoutes } from './projects.js';
+import { registerCallLogRoutes } from './callLogs.js';
+import { registerExotelRoutes } from './exotel.js';
 import {
   createSession,
   endSession,
@@ -80,6 +85,7 @@ app.use(
   })
 );
 app.use(express.json({ limit: '2mb' }));
+app.use(express.urlencoded({ extended: false, limit: '2mb' }));
 
 // Serving interactive API docs at /api/docs.
 if (config.enableApiDocs) {
@@ -115,7 +121,49 @@ const loginLimiter = rateLimit({
 });
 
 const COMPANY_SELECT = `
-  SELECT c.*, u.name AS assigned_to_name
+  SELECT c.*, u.name AS assigned_to_name,
+         EXISTS (
+           SELECT 1 FROM project_documents d
+           WHERE (d.company_id = c.id
+                  OR d.handoff_id IN (SELECT h.id FROM project_handoffs h WHERE h.company_id = c.id)
+                  OR d.project_id IN (SELECT p.id FROM projects p WHERE p.company_id = c.id))
+             AND d.deleted_at IS NULL AND d.uploaded_at IS NOT NULL
+         ) AS has_document,
+         EXISTS (
+           SELECT 1 FROM project_documents d
+           WHERE (d.company_id = c.id
+                  OR d.handoff_id IN (SELECT h.id FROM project_handoffs h WHERE h.company_id = c.id)
+                  OR d.project_id IN (SELECT p.id FROM projects p WHERE p.company_id = c.id))
+             AND d.deleted_at IS NULL AND d.uploaded_at IS NOT NULL
+             AND d.document_type = 'quotation'
+         ) AS has_quotation,
+         (
+           SELECT d.id FROM project_documents d
+           WHERE (d.company_id = c.id
+                  OR d.handoff_id IN (SELECT h.id FROM project_handoffs h WHERE h.company_id = c.id)
+                  OR d.project_id IN (SELECT p.id FROM projects p WHERE p.company_id = c.id))
+             AND d.deleted_at IS NULL AND d.uploaded_at IS NOT NULL
+           ORDER BY (d.document_type = 'quotation') DESC, d.created_at DESC
+           LIMIT 1
+         ) AS primary_document_id,
+         (
+           SELECT d.original_filename FROM project_documents d
+           WHERE (d.company_id = c.id
+                  OR d.handoff_id IN (SELECT h.id FROM project_handoffs h WHERE h.company_id = c.id)
+                  OR d.project_id IN (SELECT p.id FROM projects p WHERE p.company_id = c.id))
+             AND d.deleted_at IS NULL AND d.uploaded_at IS NOT NULL
+           ORDER BY (d.document_type = 'quotation') DESC, d.created_at DESC
+           LIMIT 1
+         ) AS primary_document_name,
+         (
+           SELECT d.document_type FROM project_documents d
+           WHERE (d.company_id = c.id
+                  OR d.handoff_id IN (SELECT h.id FROM project_handoffs h WHERE h.company_id = c.id)
+                  OR d.project_id IN (SELECT p.id FROM projects p WHERE p.company_id = c.id))
+             AND d.deleted_at IS NULL AND d.uploaded_at IS NOT NULL
+           ORDER BY (d.document_type = 'quotation') DESC, d.created_at DESC
+           LIMIT 1
+         ) AS primary_document_type
   FROM companies c
   LEFT JOIN users u ON u.id = c.assigned_to
 `;
@@ -227,7 +275,100 @@ async function autoMoveCompanyForContact(
     },
     executor
   );
+  if (target === 'Converted' || target === 'Closed Won') {
+    await ensureConvertedProject(executor, String(contact.company_id), actor);
+  }
   return target;
+}
+
+export async function ensureConvertedProject(
+  executor: ActivityExecutor,
+  companyId: string,
+  actor: { userId: string; sessionId?: string }
+): Promise<string | null> {
+  const { rows: existing } = await executor.query(
+    'SELECT id FROM projects WHERE company_id = $1 LIMIT 1',
+    [companyId]
+  );
+  if (existing.length > 0) return String(existing[0].id);
+
+  const { rows: companyRows } = await executor.query(
+    `SELECT c.company_name, c.assigned_to, c.notes,
+            h.id AS handoff_id, h.project_title, h.project_type, h.description,
+            h.functional_requirements, h.preferred_technology, h.expected_timeline,
+            h.submitted_by
+     FROM companies c
+     LEFT JOIN project_handoffs h ON h.company_id = c.id
+     WHERE c.id = $1
+     ORDER BY h.created_at DESC
+     LIMIT 1`,
+    [companyId]
+  );
+  const comp = companyRows[0];
+  if (!comp) return null;
+
+  const projectTitle = comp.project_title || `${comp.company_name} - Project Implementation`;
+  const projectType = comp.project_type || 'Web Development';
+  const description = comp.description || comp.notes || 'Converted lead awaiting developer assignment.';
+  const functionalReqs = comp.functional_requirements || 'Technical evaluation to be completed by assigned developer.';
+  const preferredTech = comp.preferred_technology || '';
+  const expectedTimeline = comp.expected_timeline || '4-6 weeks';
+  const creatorId = comp.submitted_by || comp.assigned_to || actor.userId;
+
+  const { rows: projectRows } = await executor.query(
+    `INSERT INTO projects (
+       handoff_id, company_id, created_by, assigned_developer_id,
+       project_title, project_type, description, functional_requirements,
+       preferred_technology, expected_timeline, status
+     ) VALUES ($1, $2, $3, NULL, $4, $5, $6, $7, $8, $9, 'awaiting_assignment')
+     RETURNING id`,
+    [
+      comp.handoff_id || null,
+      companyId,
+      creatorId,
+      projectTitle,
+      projectType,
+      description,
+      functionalReqs,
+      preferredTech,
+      expectedTimeline,
+    ]
+  );
+  const projectId = String(projectRows[0].id);
+
+  if (comp.handoff_id) {
+    await executor.query(
+      "UPDATE project_handoffs SET status = 'converted', updated_at = now() WHERE id = $1",
+      [comp.handoff_id]
+    );
+  }
+
+  await executor.query(
+    `UPDATE project_documents SET project_id = $1
+     WHERE (company_id = $2 OR handoff_id = $3) AND project_id IS NULL`,
+    [projectId, companyId, comp.handoff_id || null]
+  );
+
+  await executor.query(
+    `INSERT INTO project_updates (project_id, author_id, update_type, body)
+     VALUES ($1, $2, 'assignment', 'Lead converted. Awaiting developer assignment by Admin.')`,
+    [projectId, actor.userId]
+  );
+
+  await logActivity(
+    {
+      userId: actor.userId,
+      sessionId: actor.sessionId,
+      eventType: 'project.created',
+      entityType: 'system',
+      entityId: projectId,
+      summary: `Project created for converted lead (${comp.company_name}) awaiting developer assignment`,
+      payload: { companyId, projectId },
+    },
+    executor
+  );
+
+  return projectId;
 }
 
 // ─── Public config (no auth) ────────────────────────────────────────────────
@@ -564,10 +705,19 @@ app.post('/api/users', requireAuth, requireCsrf, requireAdmin, async (req, res) 
 
 // ─── Bootstrap ──────────────────────────────────────────────────────────────
 
-app.get('/api/bootstrap', requireAuth, async (_req, res) => {
+app.get('/api/bootstrap', requireAuth, async (req, res) => {
+  const scope = companyScope(req.user!.role, req.user!.sub);
+  const contactScope = req.user!.role === 'admin' || req.user!.role === 'founder'
+    ? { sql: '', values: [] as string[] }
+    : req.user!.role === 'sdr'
+      ? { sql: 'WHERE co.assigned_to = $1 OR (ct.company_id IS NULL AND ct.created_by = $1)', values: [req.user!.sub] }
+      : { sql: 'WHERE FALSE', values: [] as string[] };
   const [companies, contacts, history] = await Promise.all([
-    pool.query(`${COMPANY_SELECT} ORDER BY c.created_at DESC`),
-    pool.query('SELECT * FROM contacts ORDER BY created_at DESC'),
+    pool.query(`${COMPANY_SELECT} WHERE TRUE${scope.sql} ORDER BY c.created_at DESC`, scope.values),
+    pool.query(
+      `SELECT ct.* FROM contacts ct LEFT JOIN companies co ON co.id = ct.company_id ${contactScope.sql} ORDER BY ct.created_at DESC`,
+      contactScope.values
+    ),
     // Statuses each contact has held + when it was first worked, from the activity log.
     pool.query(`
       SELECT
@@ -585,8 +735,9 @@ app.get('/api/bootstrap', requireAuth, async (_req, res) => {
       WHERE ae.entity_type = 'contact'
         AND ae.entity_id IS NOT NULL
         AND ae.event_type IN ('contact.status_changed', 'contact.created')
+        AND (ae.entity_id IN (SELECT ct.id FROM contacts ct LEFT JOIN companies co ON co.id = ct.company_id ${contactScope.sql}))
       GROUP BY ae.entity_id
-    `),
+    `, contactScope.values),
   ]);
   const historyById = new Map(history.rows.map((r) => [String(r.id), r]));
   res.json({
@@ -607,7 +758,7 @@ app.get('/api/bootstrap', requireAuth, async (_req, res) => {
   });
 });
 
-app.get('/api/metrics', requireAuth, async (_req, res) => {
+app.get('/api/metrics', requireAuth, async (req, res) => {
   const activeStages = [
     'Discovery Call Done',
     'Follow-up',
@@ -630,11 +781,17 @@ app.get('/api/metrics', requireAuth, async (_req, res) => {
       COUNT(*) FILTER (WHERE stage = ANY($2::text[]))::int AS active_opportunities,
       COUNT(*) FILTER (WHERE stage = 'Closed Won')::int AS closed_won,
       COUNT(*) FILTER (WHERE stage = 'Closed Lost')::int AS closed_lost
-    FROM companies
+    FROM companies c
+    WHERE TRUE${companyScope(req.user!.role, req.user!.sub, 'c', 3).sql}
     `,
-    [today, activeStages]
+    [today, activeStages, ...companyScope(req.user!.role, req.user!.sub).values]
   );
-  const { rows: contactRows } = await pool.query('SELECT COUNT(*)::int AS n FROM contacts');
+  const contactCountSql = req.user!.role === 'admin' || req.user!.role === 'founder'
+    ? 'SELECT COUNT(*)::int AS n FROM contacts'
+    : req.user!.role === 'sdr'
+      ? 'SELECT COUNT(*)::int AS n FROM contacts ct LEFT JOIN companies co ON co.id=ct.company_id WHERE co.assigned_to=$1 OR (ct.company_id IS NULL AND ct.created_by=$1)'
+      : 'SELECT 0::int AS n';
+  const { rows: contactRows } = await pool.query(contactCountSql, req.user!.role === 'sdr' ? [req.user!.sub] : []);
   const m = rows[0];
   res.json({
     totalCompanies: m.total_companies,
@@ -650,7 +807,7 @@ app.get('/api/metrics', requireAuth, async (_req, res) => {
 
 // ─── Companies ─────────────────────────────────────────────────────────────
 
-app.post('/api/companies', requireAuth, requireCsrf, async (req, res) => {
+app.post('/api/companies', requireAuth, requireCallerOrAdmin, requireCsrf, async (req, res) => {
   const b = req.body;
   const settings = await getAppSettings();
   const stage = b.stage ?? settings.stages[0] ?? 'Lead Added';
@@ -747,12 +904,16 @@ app.post('/api/companies', requireAuth, requireCsrf, async (req, res) => {
   res.status(201).json(company);
 });
 
-app.patch('/api/companies/:id', requireAuth, requireCsrf, async (req, res) => {
+app.patch('/api/companies/:id', requireAuth, requireCallerOrAdmin, requireCsrf, async (req, res) => {
   const { id } = req.params;
   const b = req.body;
   const { rows: beforeRows } = await pool.query(`${COMPANY_SELECT} WHERE c.id = $1`, [id]);
   const before = beforeRows[0];
   if (!before) {
+    res.status(404).json({ error: 'Company not found' });
+    return;
+  }
+  if (!(await canAccessCompany(pool, req.user!, String(id)))) {
     res.status(404).json({ error: 'Company not found' });
     return;
   }
@@ -799,6 +960,23 @@ app.patch('/api/companies/:id', requireAuth, requireCsrf, async (req, res) => {
     update.set('discovery_answers', JSON.stringify(answers), 'jsonb');
   }
 
+  if (b.stage === 'Handoff Submitted' && b.stage !== before.stage) {
+    const { rows: docCheck } = await pool.query(
+      `SELECT EXISTS (
+         SELECT 1 FROM project_documents d
+         WHERE (d.company_id = $1
+                OR d.handoff_id IN (SELECT h.id FROM project_handoffs h WHERE h.company_id = $1)
+                OR d.project_id IN (SELECT p.id FROM projects p WHERE p.company_id = $1))
+           AND d.deleted_at IS NULL AND d.uploaded_at IS NOT NULL
+       ) AS has_doc`,
+      [id]
+    );
+    if (!docCheck[0]?.has_doc) {
+      res.status(400).json({ error: 'A quotation or scope document must be attached before moving a lead to Handoff Submitted.' });
+      return;
+    }
+  }
+
   if (update.isEmpty) {
     res.status(400).json({ error: 'No fields to update' });
     return;
@@ -817,6 +995,9 @@ app.patch('/api/companies/:id', requireAuth, requireCsrf, async (req, res) => {
   const sid = req.user!.sid;
   const uid = req.user!.sub;
   if (b.stage !== undefined && b.stage !== before.stage) {
+    if (b.stage === 'Converted' || b.stage === 'Closed Won') {
+      await ensureConvertedProject(pool, String(id), { userId: uid, sessionId: sid });
+    }
     const source =
       typeof b.stageChangeSource === 'string' && b.stageChangeSource.trim()
         ? b.stageChangeSource.trim()
@@ -1020,8 +1201,12 @@ app.delete('/api/companies/:id', requireAuth, requireCsrf, requireAdmin, async (
 
 // ─── Contacts ────────────────────────────────────────────────────────────────
 
-app.post('/api/contacts', requireAuth, requireCsrf, async (req, res) => {
+app.post('/api/contacts', requireAuth, requireCallerOrAdmin, requireCsrf, async (req, res) => {
   const b = req.body;
+  if (b.companyId && !(await canAccessCompany(pool, req.user!, String(b.companyId)))) {
+    res.status(404).json({ error: 'Company not found' });
+    return;
+  }
   const settings = await getAppSettings();
   const contactStatus = b.contactStatus ?? settings.contactStatuses[0] ?? 'Not Contacted';
   if (!isAllowedContactStatus(settings, contactStatus)) {
@@ -1034,8 +1219,8 @@ app.post('/api/contacts', requireAuth, requireCsrf, async (req, res) => {
     `
     INSERT INTO contacts (
       contact_name, company_id, role, phone, email, linkedin_profile,
-      contact_status, champion, last_contacted, next_follow_up, notes, whatsapp_sent_at
-    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+      contact_status, champion, last_contacted, next_follow_up, notes, whatsapp_sent_at, created_by
+    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
     RETURNING *
     `,
     [
@@ -1051,6 +1236,7 @@ app.post('/api/contacts', requireAuth, requireCsrf, async (req, res) => {
       b.nextFollowUp ?? null,
       b.notes ?? '',
       b.whatsappSent === true ? new Date() : null,
+      req.user!.sub,
     ]
   );
   const contact = rows[0];
@@ -1077,7 +1263,7 @@ app.post('/api/contacts', requireAuth, requireCsrf, async (req, res) => {
   res.status(201).json(mapped);
 });
 
-app.post('/api/contacts/bulk-status', requireAuth, requireCsrf, async (req, res) => {
+app.post('/api/contacts/bulk-status', requireAuth, requireCallerOrAdmin, requireCsrf, async (req, res) => {
   const { contactIds, contactStatus } = req.body;
   if (!Array.isArray(contactIds) || contactIds.length === 0) {
     res.status(400).json({ error: 'No contacts selected' });
@@ -1094,11 +1280,25 @@ app.post('/api/contacts/bulk-status', requireAuth, requireCsrf, async (req, res)
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
+    if (req.user!.role !== 'admin' && req.user!.role !== 'founder') {
+      const owned = await client.query(
+        `SELECT COUNT(*)::int AS n FROM contacts ct LEFT JOIN companies co ON co.id=ct.company_id
+         WHERE ct.id = ANY($1::uuid[]) AND (co.assigned_to=$2 OR (ct.company_id IS NULL AND ct.created_by=$2))`,
+        [contactIds, req.user!.sub]
+      );
+      if (owned.rows[0].n !== new Set(contactIds).size) {
+        await client.query('ROLLBACK');
+        res.status(404).json({ error: 'One or more contacts were not found' });
+        return;
+      }
+    }
     const { rows } = await client.query(
       `UPDATE contacts SET contact_status = $1, updated_at = now()
        WHERE id = ANY($2::uuid[])
+         AND ($3::boolean OR EXISTS (SELECT 1 FROM companies co WHERE co.id=contacts.company_id AND co.assigned_to=$4)
+              OR (contacts.company_id IS NULL AND contacts.created_by=$4))
        RETURNING id, contact_name, contact_status, company_id, champion`,
-      [contactStatus, contactIds]
+      [contactStatus, contactIds, req.user!.role === 'admin' || req.user!.role === 'founder', req.user!.sub]
     );
 
     const sid = req.user!.sid;
@@ -1147,7 +1347,7 @@ app.post('/api/contacts/bulk-status', requireAuth, requireCsrf, async (req, res)
  * Mark (or unmark) the WhatsApp message as sent for many contacts at once.
  * Contacts already in the requested state are left alone, so the first sent time is kept.
  */
-app.post('/api/contacts/bulk-whatsapp', requireAuth, requireCsrf, async (req, res) => {
+app.post('/api/contacts/bulk-whatsapp', requireAuth, requireCallerOrAdmin, requireCsrf, async (req, res) => {
   const { contactIds, sent } = req.body;
   if (!Array.isArray(contactIds) || contactIds.length === 0) {
     res.status(400).json({ error: 'No contacts selected' });
@@ -1161,15 +1361,31 @@ app.post('/api/contacts/bulk-whatsapp', requireAuth, requireCsrf, async (req, re
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
+    if (req.user!.role !== 'admin' && req.user!.role !== 'founder') {
+      const owned = await client.query(
+        `SELECT COUNT(*)::int AS n FROM contacts ct LEFT JOIN companies co ON co.id=ct.company_id
+         WHERE ct.id = ANY($1::uuid[]) AND (co.assigned_to=$2 OR (ct.company_id IS NULL AND ct.created_by=$2))`,
+        [contactIds, req.user!.sub]
+      );
+      if (owned.rows[0].n !== new Set(contactIds).size) {
+        await client.query('ROLLBACK');
+        res.status(404).json({ error: 'One or more contacts were not found' });
+        return;
+      }
+    }
     const { rows } = await client.query(
       sent
         ? `UPDATE contacts SET whatsapp_sent_at = now(), updated_at = now()
            WHERE id = ANY($1::uuid[]) AND whatsapp_sent_at IS NULL
+             AND ($2::boolean OR EXISTS (SELECT 1 FROM companies co WHERE co.id=contacts.company_id AND co.assigned_to=$3)
+                  OR (contacts.company_id IS NULL AND contacts.created_by=$3))
            RETURNING id, contact_name, whatsapp_sent_at`
         : `UPDATE contacts SET whatsapp_sent_at = NULL, updated_at = now()
            WHERE id = ANY($1::uuid[]) AND whatsapp_sent_at IS NOT NULL
+             AND ($2::boolean OR EXISTS (SELECT 1 FROM companies co WHERE co.id=contacts.company_id AND co.assigned_to=$3)
+                  OR (contacts.company_id IS NULL AND contacts.created_by=$3))
            RETURNING id, contact_name, whatsapp_sent_at`,
-      [contactIds]
+      [contactIds, req.user!.role === 'admin' || req.user!.role === 'founder', req.user!.sub]
     );
 
     for (const contact of rows) {
@@ -1200,13 +1416,21 @@ app.post('/api/contacts/bulk-whatsapp', requireAuth, requireCsrf, async (req, re
   }
 });
 
-app.patch('/api/contacts/:id', requireAuth, requireCsrf, async (req, res) => {
+app.patch('/api/contacts/:id', requireAuth, requireCallerOrAdmin, requireCsrf, async (req, res) => {
   const { id } = req.params;
   const b = req.body;
   const { rows: beforeRows } = await pool.query('SELECT * FROM contacts WHERE id = $1', [id]);
   const before = beforeRows[0];
   if (!before) {
     res.status(404).json({ error: 'Contact not found' });
+    return;
+  }
+  if (!(await canAccessContact(pool, req.user!, String(id)))) {
+    res.status(404).json({ error: 'Contact not found' });
+    return;
+  }
+  if (b.companyId && !(await canAccessCompany(pool, req.user!, String(b.companyId)))) {
+    res.status(404).json({ error: 'Company not found' });
     return;
   }
 
@@ -1244,6 +1468,23 @@ app.patch('/api/contacts/:id', requireAuth, requireCsrf, async (req, res) => {
       b.whatsappSent ? (before.whatsapp_sent_at ?? new Date()) : null,
       'timestamptz'
     );
+  }
+
+  if (b.stage === 'Handoff Submitted' && b.stage !== before.stage) {
+    const { rows: docCheck } = await pool.query(
+      `SELECT EXISTS (
+         SELECT 1 FROM project_documents d
+         WHERE (d.company_id = $1
+                OR d.handoff_id IN (SELECT h.id FROM project_handoffs h WHERE h.company_id = $1)
+                OR d.project_id IN (SELECT p.id FROM projects p WHERE p.company_id = $1))
+           AND d.deleted_at IS NULL AND d.uploaded_at IS NOT NULL
+       ) AS has_doc`,
+      [id]
+    );
+    if (!docCheck[0]?.has_doc) {
+      res.status(400).json({ error: 'A quotation or scope document must be attached before moving a lead to Handoff Submitted.' });
+      return;
+    }
   }
 
   if (update.isEmpty) {
@@ -1477,7 +1718,7 @@ app.delete('/api/contacts/:id', requireAuth, requireCsrf, requireAdmin, async (r
 
 // ─── Import ──────────────────────────────────────────────────────────────────
 
-app.post('/api/import/prospects', requireAuth, requireCsrf, async (req, res) => {
+app.post('/api/import/prospects', requireAuth, requireCallerOrAdmin, requireCsrf, async (req, res) => {
   const rows = req.body.rows as Array<{
     company: string;
     prospectName: string;
@@ -1505,8 +1746,14 @@ app.post('/api/import/prospects', requireAuth, requireCsrf, async (req, res) => 
   try {
     await client.query('BEGIN');
 
-    const { rows: companyRows } = await client.query(`${COMPANY_SELECT}`);
-    const { rows: contactRows } = await client.query('SELECT * FROM contacts');
+    const scope = companyScope(req.user!.role, req.user!.sub);
+    const { rows: companyRows } = await client.query(`${COMPANY_SELECT} WHERE TRUE${scope.sql}`, scope.values);
+    const { rows: contactRows } = await client.query(
+      req.user!.role === 'admin' || req.user!.role === 'founder'
+        ? 'SELECT * FROM contacts'
+        : 'SELECT ct.* FROM contacts ct LEFT JOIN companies co ON co.id=ct.company_id WHERE co.assigned_to=$1 OR (ct.company_id IS NULL AND ct.created_by=$1)',
+      req.user!.role === 'admin' || req.user!.role === 'founder' ? [] : [req.user!.sub]
+    );
 
     const companyByName = new Map(
       companyRows.map((c) => [String(c.company_name).toLowerCase(), c])
@@ -1640,6 +1887,9 @@ app.get('/api/health', (_req, res) => {
 
 registerConversationRoutes(app, pool);
 registerActivityRoutes(app);
+registerProjectRoutes(app, pool);
+registerCallLogRoutes(app, pool);
+registerExotelRoutes(app, pool);
 
 if (process.env.NODE_ENV === 'production') {
   const distPath = join(dirname(fileURLToPath(import.meta.url)), '..', 'dist');

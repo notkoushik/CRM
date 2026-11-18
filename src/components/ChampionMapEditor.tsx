@@ -39,13 +39,13 @@ export function ChampionMapEditor({
         Contact status → pipeline stage
       </h2>
       <p className="mt-1 text-xs text-stone-500">
-        When a contact&apos;s status changes, the company can move forward to the mapped pipeline
-        stage. Companies never move backward, so a company sits at the furthest stage any of its
+        When a contact&apos;s status changes, the lead can move forward to the mapped workflow
+        stage. Leads never move backward, so each lead sits at its furthest completed stage.
         contacts has reached. From Demo Scheduled onward, and for Closed Won / Closed Lost, stages
         are only moved by hand. Statuses without a row stay put.
       </p>
       <label className="mt-3 flex flex-col gap-1.5 text-sm sm:max-w-sm">
-        <span className="text-xs font-medium text-stone-500">Move the company when</span>
+        <span className="text-xs font-medium text-stone-500">Move the lead when</span>
         <select
           className={inputClass}
           data-testid="stage-auto-move-scope"
@@ -59,7 +59,7 @@ export function ChampionMapEditor({
 
       {rows.length === 0 ? (
         <p className="mt-3 text-sm text-stone-500" data-testid="champion-map-empty">
-          No auto-move mappings yet. Add a row to move a company when its champion hits a status.
+          No auto-move mappings yet. Add a row to move a lead when its primary contact reaches a status.
         </p>
       ) : (
         <ul className="mt-3 space-y-2">

@@ -102,8 +102,10 @@ export async function loginAs(email: string, password = 'TestSeed123!') {
 }
 
 export const SEED = {
-  founder: 'founder.seed@convobrains.com',
-  sdr: 'rahul.seed@convobrains.com',
+  founder: 'founder.seed@skylance.local',
+  sdr: 'rahul.seed@skylance.local',
+  sdrB: 'neha.seed@skylance.local',
+  developer: 'developer.seed@skylance.local',
 } as const;
 
 export type TestSession = {

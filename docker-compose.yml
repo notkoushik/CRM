@@ -9,9 +9,9 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    image: convobrains-crm:local
+    image: skylance-crm:local
     pull_policy: build
-    container_name: convobrains-crm
+    container_name: skylance-crm
     restart: unless-stopped
     env_file:
       - .env

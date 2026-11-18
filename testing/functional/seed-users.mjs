@@ -8,14 +8,20 @@ const pool = new pg.Pool({ connectionString: info.connectionString, ssl: false }
 /** Password for all fixture accounts: TestSeed123! */
 export const SEED_USERS = [
   {
-    email: 'founder.seed@convobrains.com',
+    email: 'founder.seed@skylance.local',
     password: 'TestSeed123!',
     name: 'Founder Seed',
     role: 'founder',
   },
-  { email: 'rahul.seed@convobrains.com', password: 'TestSeed123!', name: 'Rahul', role: 'sdr' },
-  { email: 'neha.seed@convobrains.com', password: 'TestSeed123!', name: 'Neha', role: 'sdr' },
-  { email: 'aman.seed@convobrains.com', password: 'TestSeed123!', name: 'Aman', role: 'sdr' },
+  { email: 'rahul.seed@skylance.local', password: 'TestSeed123!', name: 'Rahul', role: 'sdr' },
+  { email: 'neha.seed@skylance.local', password: 'TestSeed123!', name: 'Neha', role: 'sdr' },
+  { email: 'aman.seed@skylance.local', password: 'TestSeed123!', name: 'Aman', role: 'sdr' },
+  {
+    email: 'developer.seed@skylance.local',
+    password: 'TestSeed123!',
+    name: 'Developer Seed',
+    role: 'developer',
+  },
 ];
 
 const ALLOWED = new Set(SEED_USERS.map((u) => u.email));
@@ -41,6 +47,8 @@ try {
   const { rows } = await pool.query('SELECT id, email FROM users');
   for (const row of rows) {
     if (!ALLOWED.has(row.email)) {
+      // Calls require a caller; the schema's ON DELETE SET NULL cannot satisfy that column.
+      await pool.query('DELETE FROM conversations WHERE called_by = $1', [row.id]);
       await pool.query('DELETE FROM users WHERE id = $1', [row.id]);
       console.log(`Removed non-seed user ${row.email}`);
     }

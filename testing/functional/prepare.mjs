@@ -21,7 +21,7 @@ DB_SSL=false
 ALLOW_ACTIVITY_SEED=1
 PORT=4000
 JWT_SECRET=${process.env.JWT_SECRET || 'testing-jwt-secret-not-for-prod'}
-ALLOWED_EMAIL_DOMAIN=${process.env.ALLOWED_EMAIL_DOMAIN || 'convobrains.com'}
+ALLOWED_EMAIL_DOMAIN=${process.env.ALLOWED_EMAIL_DOMAIN || 'skylance.local'}
 CORS_ORIGINS=http://127.0.0.1:5173,http://localhost:5173,http://localhost:4000
 `;
     writeFileSync(envPath, body);

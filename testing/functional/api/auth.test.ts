@@ -15,7 +15,7 @@ describe('health & config', () => {
     }>('/api/config');
     expect(status).toBe(200);
     expect(data.allowAnyEmailDomain).toBe(false);
-    expect(data.allowedEmailDomains).toContain('convobrains.com');
+    expect(data.allowedEmailDomains).toContain('skylance.local');
   });
 });
 
@@ -40,7 +40,7 @@ describe('auth', () => {
       body: { email: 'someone@gmail.com', password: 'x' },
     });
     expect(status).toBe(400);
-    expect(data.error).toMatch(/@convobrains\.com|allowed/i);
+    expect(data.error).toMatch(/@skylance\.local|allowed/i);
   });
 
   it('GET /api/auth/me restores session', async () => {

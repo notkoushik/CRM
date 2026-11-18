@@ -1,5 +1,6 @@
 import type { Express, Request, Response } from 'express';
 import { requireAuth, requireAdmin, requireCsrf } from './auth.js';
+import { canAccessCompany, canAccessContact } from './access.js';
 import { pool } from './db.js';
 import {
   accumulateCallMetrics,
@@ -315,6 +316,13 @@ export function registerActivityRoutes(app: Express) {
       res.status(400).json({ error: 'entityId required' });
       return;
     }
+    const canAccess = entityType === 'contact'
+      ? await canAccessContact(pool, req.user!, entityId)
+      : await canAccessCompany(pool, req.user!, entityId);
+    if (!canAccess) {
+      res.status(404).json({ error: 'Record not found' });
+      return;
+    }
     const name = String(req.body.name ?? 'record');
     await logActivity({
       userId: req.user!.sub,
@@ -510,10 +518,14 @@ export function registerActivityRoutes(app: Express) {
   app.get('/api/activity/company/:id/history', requireAuth, async (req: Request, res: Response) => {
     const id = String(req.params.id);
     const { rows: companyRows } = await pool.query(
-      `SELECT id, company_name FROM companies WHERE id = $1`,
+      `SELECT id, company_name, assigned_to FROM companies WHERE id = $1`,
       [id]
     );
     if (!companyRows[0]) {
+      res.status(404).json({ error: 'Company not found' });
+      return;
+    }
+    if (!(await canAccessCompany(pool, req.user!, id))) {
       res.status(404).json({ error: 'Company not found' });
       return;
     }
@@ -579,6 +591,10 @@ export function registerActivityRoutes(app: Express) {
       [id]
     );
     if (!contactRows[0]) {
+      res.status(404).json({ error: 'Contact not found' });
+      return;
+    }
+    if (!(await canAccessContact(pool, req.user!, id))) {
       res.status(404).json({ error: 'Contact not found' });
       return;
     }

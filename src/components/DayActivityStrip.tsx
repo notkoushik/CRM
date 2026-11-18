@@ -86,7 +86,7 @@ export function DayActivityStrip({ dateIso, events, agents }: DayActivityStripPr
   const totalActiveSlots = rows.reduce((n, r) => n + r.slots.filter((s) => s.count > 0).length, 0);
 
   return (
-    <div className="space-y-3 rounded-none border border-[var(--color-line)] bg-white p-4">
+    <div className="space-y-3 rounded-2xl border border-slate-200 bg-white p-5 shadow-xs">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div>
           <h2 className="text-sm font-semibold text-stone-800">Day movement</h2>

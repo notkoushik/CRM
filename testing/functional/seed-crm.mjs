@@ -5,9 +5,9 @@ const info = assertSafeTestingDb();
 const pool = new pg.Pool({ connectionString: info.connectionString, ssl: false });
 
 const SDR_EMAILS = [
-  'rahul.seed@convobrains.com',
-  'neha.seed@convobrains.com',
-  'aman.seed@convobrains.com',
+  'rahul.seed@skylance.local',
+  'neha.seed@skylance.local',
+  'aman.seed@skylance.local',
 ];
 
 try {
@@ -35,44 +35,44 @@ try {
       name: 'ABC Pvt Ltd',
       stage: 'Lead Added',
       industry: 'SaaS',
-      sdr: 'rahul.seed@convobrains.com',
+      sdr: 'rahul.seed@skylance.local',
     },
     {
       name: 'Nova Health',
       stage: 'Follow-up',
       industry: 'Healthcare',
-      sdr: 'rahul.seed@convobrains.com',
+      sdr: 'rahul.seed@skylance.local',
     },
     {
       name: 'RetailMax',
       stage: 'Demo Scheduled',
       industry: 'Retail',
-      sdr: 'neha.seed@convobrains.com',
+      sdr: 'neha.seed@skylance.local',
     },
     {
       name: 'FinEdge',
       stage: 'Discovery Call Done',
       industry: 'BFSI',
-      sdr: 'neha.seed@convobrains.com',
+      sdr: 'neha.seed@skylance.local',
     },
     {
       name: 'LogiFleet',
       stage: 'Lead Added',
       industry: 'Logistics',
-      sdr: 'aman.seed@convobrains.com',
+      sdr: 'aman.seed@skylance.local',
     },
     {
       name: 'EduSpark',
       stage: 'Not Interested',
       industry: 'EdTech',
-      sdr: 'aman.seed@convobrains.com',
+      sdr: 'aman.seed@skylance.local',
     },
-    { name: 'CloudNest', stage: 'Closed Won', industry: 'SaaS', sdr: 'rahul.seed@convobrains.com' },
+    { name: 'CloudNest', stage: 'Closed Won', industry: 'SaaS', sdr: 'rahul.seed@skylance.local' },
     {
       name: 'BioLabs',
       stage: 'Lead Added',
       industry: 'Research / Biotech',
-      sdr: 'neha.seed@convobrains.com',
+      sdr: 'neha.seed@skylance.local',
     },
   ];
 

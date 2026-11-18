@@ -1,6 +1,7 @@
 import type { Express } from 'express';
 import type { Pool } from 'pg';
-import { requireAuth, requireAdmin, requireCsrf } from './auth.js';
+import { requireAuth, requireAdmin, requireCallerOrAdmin, requireCsrf } from './auth.js';
+import { canAccessCompany } from './access.js';
 import { mapConversation } from './mappers.js';
 import {
   contentTypeForExt,
@@ -32,7 +33,7 @@ const CONVERSATION_SELECT = `
 `;
 
 export function registerConversationRoutes(app: Express, pool: Pool) {
-  app.post('/api/conversations/presign', requireAuth, requireCsrf, async (req, res) => {
+  app.post('/api/conversations/presign', requireAuth, requireCallerOrAdmin, requireCsrf, async (req, res) => {
     const contactId = String(req.body.contactId ?? '');
     const fileExt = normalizeExt(String(req.body.fileExt ?? ''));
     const notes = req.body.notes != null ? String(req.body.notes) : null;
@@ -51,6 +52,10 @@ export function registerConversationRoutes(app: Express, pool: Pool) {
     );
     const contact = contacts[0];
     if (!contact) {
+      res.status(404).json({ error: 'Contact not found' });
+      return;
+    }
+    if (!(await canAccessCompany(pool, req.user!, String(contact.company_id)))) {
       res.status(404).json({ error: 'Contact not found' });
       return;
     }
@@ -80,11 +85,15 @@ export function registerConversationRoutes(app: Express, pool: Pool) {
     });
   });
 
-  app.post('/api/conversations/:id/complete', requireAuth, requireCsrf, async (req, res) => {
+  app.post('/api/conversations/:id/complete', requireAuth, requireCallerOrAdmin, requireCsrf, async (req, res) => {
     const { id } = req.params;
     const { rows } = await pool.query('SELECT * FROM conversations WHERE id = $1', [id]);
     const row = rows[0];
     if (!row) {
+      res.status(404).json({ error: 'Conversation not found' });
+      return;
+    }
+    if (!(await canAccessCompany(pool, req.user!, String(row.company_id)))) {
       res.status(404).json({ error: 'Conversation not found' });
       return;
     }
@@ -163,7 +172,7 @@ export function registerConversationRoutes(app: Express, pool: Pool) {
     res.json(mapped);
   });
 
-  app.get('/api/conversations', requireAuth, async (req, res) => {
+  app.get('/api/conversations', requireAuth, requireCallerOrAdmin, async (req, res) => {
     const contactId = req.query.contactId ? String(req.query.contactId) : null;
     const companyId = req.query.companyId ? String(req.query.companyId) : null;
     const conditions = ["cv.upload_status = 'completed'"];
@@ -176,6 +185,10 @@ export function registerConversationRoutes(app: Express, pool: Pool) {
       values.push(companyId);
       conditions.push(`cv.company_id = $${values.length}`);
     }
+    if (req.user!.role !== 'admin' && req.user!.role !== 'founder') {
+      values.push(req.user!.sub);
+      conditions.push(`co.assigned_to = $${values.length}`);
+    }
     const { rows } = await pool.query(
       `${CONVERSATION_SELECT} WHERE ${conditions.join(' AND ')} ORDER BY cv.called_at DESC`,
       values
@@ -183,13 +196,17 @@ export function registerConversationRoutes(app: Express, pool: Pool) {
     res.json(rows.map(mapConversation));
   });
 
-  app.get('/api/conversations/:id/play', requireAuth, async (req, res) => {
+  app.get('/api/conversations/:id/play', requireAuth, requireCallerOrAdmin, async (req, res) => {
     const { id } = req.params;
     const { rows } = await pool.query(
-      `SELECT s3_url FROM conversations WHERE id = $1 AND upload_status = 'completed'`,
+      `SELECT cv.s3_url, cv.company_id FROM conversations cv WHERE cv.id = $1 AND cv.upload_status = 'completed'`,
       [id]
     );
     if (!rows[0]?.s3_url) {
+      res.status(404).json({ error: 'Recording not found' });
+      return;
+    }
+    if (!(await canAccessCompany(pool, req.user!, String(rows[0].company_id)))) {
       res.status(404).json({ error: 'Recording not found' });
       return;
     }

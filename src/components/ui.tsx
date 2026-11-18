@@ -28,10 +28,10 @@ export function Modal({ open, title, onClose, children, wide }: ModalProps) {
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center overflow-y-auto sm:items-start sm:p-8">
+    <div className="fixed inset-0 z-50 flex items-end justify-center overflow-y-auto sm:items-start sm:p-6 lg:p-8">
       <button
         type="button"
-        className="fixed inset-0 z-0 bg-stone-900/40"
+        className="fixed inset-0 z-0 bg-slate-950/50 backdrop-blur-xs transition-opacity"
         aria-label="Dismiss dialog"
         onClick={onClose}
       />
@@ -39,26 +39,27 @@ export function Modal({ open, title, onClose, children, wide }: ModalProps) {
         role="dialog"
         aria-modal="true"
         aria-labelledby={titleId}
-        className={`relative z-10 my-0 w-full rounded-none border border-[var(--color-line)] bg-[var(--color-panel)] sm:my-4 ${
+        className={`relative z-10 my-0 w-full overflow-hidden rounded-t-2xl border border-slate-200 bg-white shadow-2xl sm:my-6 sm:rounded-2xl ${
           wide ? 'max-w-3xl' : 'max-w-xl'
         }`}
       >
-        <div className="flex items-center justify-between border-b border-[var(--color-line)] px-4 py-3 sm:px-5 sm:py-4">
+        <div className="flex items-center justify-between border-b border-slate-200 bg-slate-50/80 px-5 py-4">
           <h2
             id={titleId}
-            className="font-[family-name:var(--font-display)] text-xl text-stone-900 sm:text-2xl"
+            className="text-lg font-bold tracking-tight text-slate-900 sm:text-xl"
           >
             {title}
           </h2>
           <button
             type="button"
             onClick={onClose}
-            className="rounded-none px-3 py-2 text-sm text-stone-500 transition hover:bg-stone-100 hover:text-stone-800"
+            className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 transition hover:bg-slate-200/70 hover:text-slate-700 cursor-pointer"
+            aria-label="Close dialog"
           >
-            Close
+            ✕
           </button>
         </div>
-        <div className="max-h-[min(85dvh,40rem)] overflow-y-auto px-4 py-4 sm:px-5">{children}</div>
+        <div className="max-h-[min(85dvh,42rem)] overflow-y-auto p-5 sm:p-6">{children}</div>
       </div>
     </div>
   );
@@ -73,20 +74,26 @@ interface FieldProps {
 export function Field({ label, children, className = '' }: FieldProps) {
   return (
     <label className={`flex flex-col gap-1.5 text-sm ${className}`}>
-      <span className="font-medium text-stone-600">{label}</span>
+      <span className="text-xs font-semibold uppercase tracking-wider text-slate-500">{label}</span>
       {children}
     </label>
   );
 }
 
 export const inputClass =
-  'w-full rounded-none border border-[var(--color-line)] bg-white px-3 py-2.5 text-base text-stone-900 outline-none transition focus:border-teal-600 focus:ring-2 focus:ring-teal-600/15 sm:text-sm';
+  'w-full rounded-lg border border-slate-300 bg-white px-3.5 py-2 text-sm text-slate-900 placeholder:text-slate-400 outline-none transition focus:border-teal-600 focus:ring-2 focus:ring-teal-500/20 shadow-2xs [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-outer-spin-button]:m-0 [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-inner-spin-button]:m-0';
 
 export const btnPrimary =
-  'inline-flex items-center justify-center rounded-none bg-teal-700 px-4 py-2 text-sm font-medium text-white transition hover:bg-teal-800 disabled:opacity-50';
+  'inline-flex items-center justify-center rounded-lg bg-teal-600 px-4 py-2 text-sm font-semibold text-white shadow-xs transition hover:bg-teal-700 active:scale-[0.99] disabled:opacity-50 cursor-pointer';
+
+export const btnSecondary =
+  'inline-flex items-center justify-center rounded-lg bg-slate-100 px-4 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-200 active:scale-[0.99] disabled:opacity-50 cursor-pointer';
+
+export const btnDestructive =
+  'inline-flex items-center justify-center rounded-lg bg-rose-600 px-4 py-2 text-sm font-semibold text-white shadow-xs transition hover:bg-rose-700 active:scale-[0.99] disabled:opacity-50 cursor-pointer';
 
 export const btnGhost =
-  'inline-flex items-center justify-center rounded-none border border-[var(--color-line)] bg-white px-3 py-2 text-sm font-medium text-stone-700 transition hover:bg-stone-50';
+  'inline-flex items-center justify-center rounded-lg border border-slate-200 bg-white px-3.5 py-2 text-sm font-medium text-slate-700 shadow-2xs transition hover:bg-slate-50 hover:text-slate-900 cursor-pointer';
 
 interface SearchInputProps {
   value: string;
@@ -107,12 +114,19 @@ export function SearchInput({
 }: SearchInputProps) {
   return (
     <div className="relative min-w-0 flex-1">
-      <span
-        aria-hidden
-        className="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-stone-400"
+      <svg
+        className="pointer-events-none absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2 text-slate-400"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        aria-hidden="true"
       >
-        ⌕
-      </span>
+        <circle cx="11" cy="11" r="8" />
+        <line x1="21" y1="21" x2="16.65" y2="16.65" />
+      </svg>
       <input
         type="search"
         data-testid={testId}
@@ -260,10 +274,10 @@ export function FilterDropdown({
             data-testid={testId ? `${testId}-panel` : undefined}
             aria-multiselectable={multi || undefined}
             style={panelStyle}
-            className="overflow-auto border border-[var(--color-line)] bg-white shadow-lg"
+            className="overflow-auto rounded-xl border border-slate-200 bg-white shadow-xl"
           >
             {searchable ? (
-              <div className="sticky top-0 border-b border-[var(--color-line)] bg-white p-2">
+              <div className="sticky top-0 border-b border-slate-200 bg-white p-2">
                 <input
                   type="search"
                   value={query}
@@ -275,7 +289,7 @@ export function FilterDropdown({
               </div>
             ) : null}
             {filtered.length === 0 ? (
-              <p className="px-3 py-2 text-xs text-stone-400">No matches</p>
+              <p className="px-3 py-2 text-xs text-slate-400">No matches</p>
             ) : (
               filtered.map((opt) => {
                 const isOn = selected.includes(opt.value);
@@ -286,17 +300,17 @@ export function FilterDropdown({
                     role="option"
                     aria-selected={isOn}
                     onClick={() => toggle(opt.value)}
-                    className={`flex w-full items-center gap-2 px-3 py-2 text-left text-xs transition hover:bg-teal-50 ${
-                      isOn ? 'bg-teal-50/80 font-medium text-teal-900' : 'text-stone-700'
+                    className={`flex w-full items-center gap-2 px-3 py-2 text-left text-xs transition hover:bg-teal-50 cursor-pointer ${
+                      isOn ? 'bg-teal-50/80 font-semibold text-teal-900' : 'text-slate-700'
                     }`}
                   >
                     {multi ? (
                       <span
                         aria-hidden
-                        className={`inline-flex h-3.5 w-3.5 items-center justify-center border text-[9px] ${
+                        className={`inline-flex h-3.5 w-3.5 items-center justify-center rounded-sm border text-[9px] ${
                           isOn
-                            ? 'border-teal-700 bg-teal-700 text-white'
-                            : 'border-stone-300 bg-white'
+                            ? 'border-teal-600 bg-teal-600 text-white'
+                            : 'border-slate-300 bg-white'
                         }`}
                       >
                         {isOn ? '✓' : ''}
@@ -325,16 +339,16 @@ export function FilterDropdown({
           e.stopPropagation();
           setOpen((v) => !v);
         }}
-        className={`inline-flex items-center gap-1.5 rounded-none px-3 py-1.5 text-xs font-medium transition ${
+        className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold shadow-2xs transition cursor-pointer ${
           active
-            ? 'bg-teal-700 text-white'
-            : 'bg-white text-stone-600 ring-1 ring-[var(--color-line)] hover:bg-stone-50'
+            ? 'bg-teal-600 text-white shadow-xs'
+            : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-50 hover:text-slate-900'
         }`}
       >
         <span className="opacity-70">{label}:</span>
         <span>{summary}</span>
-        <span aria-hidden className="opacity-60">
-          ▾
+        <span aria-hidden className="opacity-60 text-[10px]">
+          ▼
         </span>
       </button>
       {panel}
@@ -349,15 +363,15 @@ interface FilterChipProps {
 
 export function FilterChip({ label, onClear }: FilterChipProps) {
   return (
-    <span className="inline-flex items-center gap-1 rounded-none bg-teal-50 px-2 py-1 text-[11px] font-medium text-teal-900 ring-1 ring-teal-200">
-      {label}
+    <span className="inline-flex items-center gap-1.5 rounded-lg border border-teal-200 bg-teal-50 px-2.5 py-1 text-xs font-semibold text-teal-900 shadow-2xs">
+      <span>{label}</span>
       <button
         type="button"
         onClick={onClear}
         aria-label={`Clear ${label}`}
-        className="text-teal-700 hover:text-teal-950"
+        className="font-bold text-teal-700 hover:text-teal-950 cursor-pointer"
       >
-        ×
+        ✕
       </button>
     </span>
   );
@@ -368,16 +382,16 @@ export function FilterChip({ label, onClear }: FilterChipProps) {
 interface EmptyStateProps {
   title: string; // short headline, e.g. "No companies yet"
   message: string; // one sentence explaining what to do next
-  ctaLabel: string; // button text, e.g. "+ Add company"
+  ctaLabel: string; // button text, e.g. "+ Add Lead"
   onCta: () => void; // function to run when button is clicked
 }
 
 export function EmptyState({ title, message, ctaLabel, onCta }: EmptyStateProps) {
   return (
-    <div className="flex flex-col items-center justify-center gap-2 rounded-none border border-dashed border-line bg-panel px-4 py-12 text-center">
-      <p className="font-display text-xl text-stone-800">{title}</p>
-      <p className="max-w-sm text-sm text-stone-500">{message}</p>
-      <button type="button" className={btnPrimary} onClick={onCta}>
+    <div className="flex flex-col items-center justify-center gap-2.5 rounded-2xl border border-dashed border-slate-300 bg-white/70 px-6 py-14 text-center shadow-2xs">
+      <p className="text-xl font-bold tracking-tight text-slate-800">{title}</p>
+      <p className="max-w-sm text-sm text-slate-500">{message}</p>
+      <button type="button" className={`${btnPrimary} mt-2`} onClick={onCta}>
         {ctaLabel}
       </button>
     </div>
@@ -393,7 +407,7 @@ export function Skeleton({ className = '' }: { className?: string }) {
   return (
     <div
       aria-hidden="true"
-      className={`motion-safe:animate-pulse rounded-none bg-stone-200 ${className}`}
+      className={`motion-safe:animate-pulse rounded-lg bg-slate-200 ${className}`}
     />
   );
 }
