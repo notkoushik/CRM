@@ -64,7 +64,8 @@ async function runSql(file) {
   // Fall back to node-pg if psql CLI is not installed or failed
   const { default: pg } = await import('pg');
   const sql = readFileSync(abs, 'utf8');
-  const client = new pg.Client({ connectionString: parseDbUrl(raw), ssl: false });
+  const useSsl = process.env.DB_SSL === 'false' ? false : { rejectUnauthorized: false };
+  const client = new pg.Client({ connectionString: parseDbUrl(raw), ssl: useSsl });
   await client.connect();
   try {
     await client.query(sql);
