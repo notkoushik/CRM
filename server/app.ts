@@ -20,7 +20,7 @@ import {
   USER_ROLES,
 } from './auth.js';
 import { canAccessCompany, canAccessContact, companyScope } from './access.js';
-import { mapCompany, mapContact } from './mappers.js';
+import { mapCompany, mapContact, capitalizeName } from './mappers.js';
 import { registerConversationRoutes } from './conversations.js';
 import { registerActivityRoutes } from './activityRoutes.js';
 import { registerProjectRoutes } from './projects.js';
@@ -681,7 +681,7 @@ app.post('/api/users', requireAuth, requireCsrf, requireAdmin, async (req, res) 
       `INSERT INTO users (email, password_hash, name, role)
        VALUES ($1, $2, $3, $4)
        RETURNING id, email, name, role, created_at`,
-      [email, passwordHash, name, role]
+      [email, passwordHash, capitalizeName(name), role]
     );
     const row = rows[0];
     res.status(201).json({
@@ -1224,7 +1224,7 @@ app.post('/api/contacts', requireAuth, requireCallerOrAdmin, requireCsrf, async 
     RETURNING *
     `,
     [
-      b.contactName,
+      capitalizeName(b.contactName),
       b.companyId ?? null,
       b.role ?? '',
       b.phone ?? '',
@@ -1436,7 +1436,7 @@ app.patch('/api/contacts/:id', requireAuth, requireCallerOrAdmin, requireCsrf, a
 
   const update = sqlUpdateBuilder();
 
-  if (b.contactName !== undefined) update.set('contact_name', b.contactName);
+  if (b.contactName !== undefined) update.set('contact_name', capitalizeName(b.contactName));
   if (b.companyId !== undefined) update.set('company_id', b.companyId);
   if (b.role !== undefined) update.set('role', b.role);
   if (b.phone !== undefined) update.set('phone', b.phone);
@@ -1848,7 +1848,7 @@ app.post('/api/import/prospects', requireAuth, requireCallerOrAdmin, requireCsrf
           ) VALUES ($1, $2, $3, $4, $5, 'Not Contacted')
           RETURNING *
           `,
-          [row.prospectName, company.id, row.jobTitle ?? '', row.phone ?? '', email]
+          [capitalizeName(row.prospectName), company.id, row.jobTitle ?? '', row.phone ?? '', email]
         );
         contactRows.unshift(ins.rows[0]);
         if (email) emailSet.add(email);

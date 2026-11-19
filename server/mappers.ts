@@ -52,10 +52,30 @@ export function mapCompany(row: Record<string, unknown>): Company {
   };
 }
 
+export function capitalizeName(str?: string | null): string {
+  if (!str) return '';
+  return str
+    .trim()
+    .split(/\s+/)
+    .map((word) => {
+      if (!word) return '';
+      return word
+        .split('-')
+        .map((subToken) => {
+          if (!subToken) return '';
+          const isAllUpper = subToken.length > 1 && subToken === subToken.toUpperCase();
+          const clean = isAllUpper ? subToken.toLowerCase() : subToken;
+          return clean.charAt(0).toUpperCase() + clean.slice(1);
+        })
+        .join('-');
+    })
+    .join(' ');
+}
+
 export function mapContact(row: Record<string, unknown>): Contact {
   return {
     id: String(row.id),
-    contactName: String(row.contact_name),
+    contactName: capitalizeName(String(row.contact_name)),
     companyId: row.company_id ? String(row.company_id) : null,
     role: String(row.role ?? ''),
     phone: String(row.phone ?? ''),
